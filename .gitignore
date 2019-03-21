@@ -1,0 +1,8 @@
+# build artifacts
+/lib
+
+# npm dependencies
+node_modules
+
+# IntelliJ IDE files
+.idea/
