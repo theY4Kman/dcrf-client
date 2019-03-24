@@ -124,7 +124,8 @@ class DCRFClient implements IStreamingAPI {
     }
 
     const selector = DCRFClient.buildSubscriptionSelector(stream, action, pk);
-    const handler: (data: typeof selector & {payload: {data: any}}) => void = this.buildListener(callback);const payload = DCRFClient.buildSubscribePayload(action, pk);
+    const handler: (data: typeof selector & {payload: {data: any}}) => void = this.buildListener(callback);
+    const payload = DCRFClient.buildSubscribePayload(action, pk);
 
     const listenerId = this.dispatcher.listen(selector, handler);
     const message = DCRFClient.buildMultiplexedMessage(stream, payload);
@@ -142,11 +143,14 @@ class DCRFClient implements IStreamingAPI {
    * Send subscription requests for all registered subscriptions
    */
   public resubscribe() {
-    const subscriptions = Object.values(this.subscriptions);
+    const subscriptions: Array<{message: {requestId?: string}}> = Object.values(this.subscriptions);
 
     log.info('Resending %d subscription requests', subscriptions.length);
 
     for (const {message} of subscriptions) {
+      if (message.requestId == null) {
+        message.requestId = UUID.generate();
+      }
       this.sendNow(message);
     }
   }
