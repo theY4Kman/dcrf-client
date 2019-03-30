@@ -37,7 +37,11 @@ client.retrieve('people', 4).then(person => {
   console.info('Retrieved person 4:', person);
 });
 
-client.update('people', 4, {name: 'Johannes'}).then(person => {
+client.update('people', 4, {name: 'Johannes', address: '123 Easy St'}).then(person => {
+  console.info('Overwrote person 4. Properties after change:', person);
+});
+
+client.patch('people', 4, {name: 'Jefe'}).then(person => {
   console.info('Changed name of person 4. Properties after change:', person);
 });
 
