@@ -73,50 +73,50 @@ class DCRFClient implements IStreamingAPI {
     this.transport.on('reconnect', this.handleTransportReconnect);
   }
 
-  public list(stream: string, data: object={}): Promise<any> {
+  public list(stream: string, data: object={}, requestId?: string): Promise<any> {
     return this.request(stream, {
       action: 'list',
       data,
-    });
+    }, requestId);
   }
 
-  public create(stream: string, props: object): Promise<any> {
+  public create(stream: string, props: object, requestId?: string): Promise<any> {
     return this.request(stream, {
       action: 'create',
       data: props,
-    });
+    }, requestId);
   }
 
-  public retrieve(stream: string, pk: number, data: object={}): Promise<any> {
+  public retrieve(stream: string, pk: number, data: object={}, requestId?: string): Promise<any> {
     return this.request(stream, {
       action: 'retrieve',
       pk,
       data,
-    });
+    }, requestId);
   }
 
-  public update(stream: string, pk: number, props: object): Promise<any> {
+  public update(stream: string, pk: number, props: object, requestId?: string): Promise<any> {
     return this.request(stream, {
       action: 'update',
       pk,
       data: props,
-    });
+    }, requestId);
   }
 
-  public patch(stream: string, pk: number, props: object): Promise<any> {
+  public patch(stream: string, pk: number, props: object, requestId?: string): Promise<any> {
     return this.request(stream, {
       action: 'patch',
       pk,
       data: props,
-    });
+    }, requestId);
   }
 
-  public delete(stream: string, pk: number, data: object={}): Promise<any> {
+  public delete(stream: string, pk: number, data: object={}, requestId?: string): Promise<any> {
     return this.request(stream, {
       action: 'delete',
       pk,
       data,
-    });
+    }, requestId);
   }
 
   public subscribe(
