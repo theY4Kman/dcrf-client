@@ -4,7 +4,7 @@ include:
   - ./test/test.ts
 exclude:
   - test/global.d.ts
-  - test/testproject
+  - test/integration
 require:
   - ts-node/register
   - '@babel/register'
