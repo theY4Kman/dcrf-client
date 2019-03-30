@@ -1,0 +1,10 @@
+extension:
+  - ts
+include:
+  - ./test/test.ts
+exclude:
+  - test/global.d.ts
+  - test/testproject
+require:
+  - ts-node/register
+  - '@babel/register'

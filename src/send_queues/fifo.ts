@@ -26,7 +26,6 @@ class FifoQueue extends BaseSendQueue implements ISendQueue {
     }
   }
 
-  @autobind
   public queueMessage(bytes: string): boolean {
     log.debug('Queueing message to send later: %o', bytes);
     this.queue.push(bytes);

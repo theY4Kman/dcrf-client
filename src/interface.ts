@@ -7,7 +7,7 @@ export
 type DispatchListener<T> = (response: T) => any;
 
 export
-type SubscriptionHandler = (payload: object) => any;
+type SubscriptionHandler = (payload: {[prop: string]: any}, action: string) => any;
 
 
 /**
@@ -234,10 +234,9 @@ interface IStreamingAPI {
    * Subscribe to updates
    *
    * @param stream Name of object's type stream
-   * @param action One of "create", "update", or "delete"
-   * @param pk Optional ID of specific DB object to watch. If not provided,
-   *           subscription will include *all* DB objects of the stream.
+   * @param pk ID of specific DB object to watch.
    * @param callback Function to call with payload on new events
+   * @param requestId Value in the payload sent as request_id to the server.
    * @return Promise resolves/rejects when response to subscription request received.
    *         On success, the promise will be resolved with null, or an empty object.
    *         On failure, the promise will be rejected with the entire API response.
@@ -245,9 +244,9 @@ interface IStreamingAPI {
    *         to cancel the subscription.
    */
   subscribe(stream: string,
-            action: SubscriptionAction,
-            pk?: number | SubscriptionHandler,
-            callback?: SubscriptionHandler
+            pk: number | SubscriptionHandler | null,
+            callback: SubscriptionHandler,
+            requestId?: string,
   ): CancelablePromise<object | null>;
 
   /**
@@ -293,6 +292,11 @@ export type MessagePreprocessor = (message: object) => object | undefined;
 
 export
 interface IDCRFOptions {
+  dispatcher?: IDispatcher,
+  transport?: ITransport,
+  queue?: ISendQueue,
+  serializer?: ISerializer,
+
   preprocessPayload?: PayloadPreprocessor,
   preprocessMessage?: MessagePreprocessor,
 
