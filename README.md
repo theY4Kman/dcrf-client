@@ -19,14 +19,14 @@ NOTE: This library is a TypeScript port of [channels-api-client](https://github.
 ## Install
 
 ```bash
-npm install --save dcrf-client
+npm install dcrf-client
 ```
 
 
 ## Usage
 
 ```javascript
-const dcrf = require('channels-api');
+const dcrf = require('dcrf-client');
 const client = dcrf.connect('wss://example.com');
 
 client.create('people', {name: 'Alex'}).then(person => {
@@ -46,21 +46,17 @@ client.delete('people', 4).then(() => {
 });
 
 
-// Subscribe to updates to any person
-const subscription = client.subscribe('people', 'update', person => {
-  console.info('A person was updated:', person);
+// Subscribe to updates to person 1
+const personalSubscription = client.subscribe('people', 1, (person, action) => {
+  if (action === 'update') {
+    console.info('Person 1 was updated:', person);
+  }
+  else if (action === 'delete') {
+    console.info('Person 1 was deleted!')
+  }
 });
 
 // Stop listening for updates
-subscription.cancel();
-
-
-// Subscribe to updates to person 1
-const personalSubscription = client.subscribe('people', 'update', 1, person => {
-  console.info('Person 1 was updated:', person);
-});
-
-// Stop listening
 personalSubscription.cancel();
 
 
@@ -76,7 +72,7 @@ client.request('mystream', {key: 'value'}).then(response => {
 The client can be customized by passing an object as the second argument to `connect()` or `createClient()`. The available options are described below.
 
 ```javascript
-const dcrf = require('channels-api');
+const dcrf = require('dcrf-client');
 
 const client = dcrf.connect('wss://example.com', {
   preprocessPayload: (stream, payload, requestId) => {
