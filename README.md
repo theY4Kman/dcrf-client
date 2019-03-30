@@ -114,3 +114,31 @@ const client = dcrf.connect('wss://example.com', {
   }
 });
 ```
+
+
+## Development
+
+There are two main test suites: unit tests (in `test/test.ts`) to verify intended behaviour of the client, and integration tests (in `test/integration/tests/test.ts`) to verify the client interacts with the server properly.
+
+Both suites utilize Mocha as the test runner, though the integration tests are executed through py.test, to provide a live server to make requests against.
+
+The integration tests require separate dependencies. To install them, first [install pipenv](https://pipenv.readthedocs.io/en/latest/install/#installing-pipenv), then run `pipenv install`.
+
+To run both test suites: `npm run test`
+
+To run unit tests: `npm run test:unit` or `mocha`
+
+To run integration tests: `npm run test:unit` or `py.test`
+
+
+### How do the integration tests work?
+
+[pytest](https://docs.pytest.org/en/latest/) provides a number of hooks to modify how tests are collected, executed, and reported. These are utilized to discover tests from a Mocha suite, and execute them on pytest's command.
+
+Our pytest-mocha plugin first spawns a subprocess to a custom Mocha runner, which collects its own TypeScript-based tests and emits that test info in JSON format to stdout. pytest-mocha reads this info and reports it to pytest, allowing pytest to print out the true names from the Mocha suite. Using [deasync](https://github.com/abbr/deasync), the Mocha process waits for pytest-mocha to send an acknowledgment (a newline) to stdin before continuing.
+
+pytest-mocha then spins up a live Daphne server for the tests to utilize. Before each test, the Mocha suite emits another JSON message informing pytest-mocha which test is about to run. pytest-mocha replies with the connection info in JSON format to the Mocha runner's stdin. The Mocha suite uses this to initialize a DCRFClient for each test.
+
+At the end of each test, Mocha emits a "test ended" message. pytest-mocha then wipes the database (with the help of pytest-django) for the next test run.
+
+NOTE: this is sorta complicated and brittle. it would be nice to refactor this into something more robust. at least for now it provides some assurance the client interacts with the server properly, and also serves as an example for properly setting up a Django Channels project.

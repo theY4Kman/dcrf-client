@@ -1,18 +1,19 @@
 import autobind from 'autobind-decorator';
-import { getLogger } from 'loglevel';
+import {getLogger} from 'loglevel';
 
 import UUID from './lib/UUID';
 
 import {
+  DispatchListener,
   IDCRFOptions,
   IDispatcher,
+  IMessageEvent,
   ISendQueue,
   ISerializer,
   IStreamingAPI,
   ITransport,
-  IMessageEvent,
   SubscriptionAction,
-  SubscriptionHandler, DispatchListener,
+  SubscriptionHandler,
 } from './interface';
 
 import {SubscriptionPromise} from './subscriptions';
@@ -72,66 +73,76 @@ class DCRFClient implements IStreamingAPI {
     this.transport.on('reconnect', this.handleTransportReconnect);
   }
 
-  public list(stream: string, data: object={}): Promise<object> {
+  public list(stream: string, data: object={}, requestId?: string): Promise<any> {
     return this.request(stream, {
       action: 'list',
       data,
-    });
+    }, requestId);
   }
 
-  public create(stream: string, props: object): Promise<object> {
+  public create(stream: string, props: object, requestId?: string): Promise<any> {
     return this.request(stream, {
       action: 'create',
       data: props,
-    });
+    }, requestId);
   }
 
-  public retrieve(stream: string, pk: number, data: object={}): Promise<object> {
+  public retrieve(stream: string, pk: number, data: object={}, requestId?: string): Promise<any> {
     return this.request(stream, {
       action: 'retrieve',
       pk,
       data,
-    });
+    }, requestId);
   }
 
-  public update(stream: string, pk: number, props: object): Promise<object> {
+  public update(stream: string, pk: number, props: object, requestId?: string): Promise<any> {
     return this.request(stream, {
       action: 'update',
       pk,
       data: props,
-    });
+    }, requestId);
   }
 
-  public delete(stream: string, pk: number, data: object={}): Promise<object> {
+  public patch(stream: string, pk: number, props: object, requestId?: string): Promise<any> {
+    return this.request(stream, {
+      action: 'patch',
+      pk,
+      data: props,
+    }, requestId);
+  }
+
+  public delete(stream: string, pk: number, data: object={}, requestId?: string): Promise<any> {
     return this.request(stream, {
       action: 'delete',
       pk,
       data,
-    });
+    }, requestId);
   }
 
-  public subscribe(stream: string,
-            action: SubscriptionAction,
-            pk?: number | SubscriptionHandler,
-            callback?: SubscriptionHandler): SubscriptionPromise<object> {
-    if (typeof pk === 'function') {
-      callback = pk;
-      pk = undefined;
-    }
-
+  public subscribe(
+      stream: string,
+      pk: number,
+      callback: SubscriptionHandler,
+      requestId?: string,
+  ): SubscriptionPromise<object>
+  {
     if (callback == null) {
       throw new Error('callback must be provided');
     }
 
-    const selector = DCRFClient.buildSubscriptionSelector(stream, action, pk);
-    const handler: (data: typeof selector & {payload: {data: any}}) => void = this.buildListener(callback);
-    const payload = DCRFClient.buildSubscribePayload(action, pk);
+    if (requestId == null) {
+      requestId = UUID.generate();
+    }
+
+    const selector = DCRFClient.buildSubscribeSelector(stream, pk, requestId);
+    const handler: (data: typeof selector & {payload: {data: any, action: string}}) => void = this.buildSubscribeListener(callback);
+    const payload = DCRFClient.buildSubscribePayload(pk, requestId);
 
     const listenerId = this.dispatcher.listen(selector, handler);
     const message = DCRFClient.buildMultiplexedMessage(stream, payload);
     this.subscriptions[listenerId] = {selector, handler, message};
 
-    const requestPromise = this.request(stream, payload);
+    const requestPromise = this.request(stream, payload, requestId);
     const unsubscribe = this.unsubscribe.bind(this, listenerId);
 
     return new SubscriptionPromise((resolve, reject) => {
@@ -143,19 +154,16 @@ class DCRFClient implements IStreamingAPI {
    * Send subscription requests for all registered subscriptions
    */
   public resubscribe() {
-    const subscriptions: Array<{message: {requestId?: string}}> = Object.values(this.subscriptions);
+    const subscriptions: Array<{message: object}> = Object.values(this.subscriptions);
 
     log.info('Resending %d subscription requests', subscriptions.length);
 
     for (const {message} of subscriptions) {
-      if (message.requestId == null) {
-        message.requestId = UUID.generate();
-      }
       this.sendNow(message);
     }
   }
 
-  public request(stream: string, payload: object, requestId: string=UUID.generate()): Promise<object> {
+  public request(stream: string, payload: object, requestId: string=UUID.generate()): Promise<any> {
     return new Promise((resolve, reject) => {
       const selector = DCRFClient.buildRequestResponseSelector(stream, requestId);
 
@@ -244,40 +252,49 @@ class DCRFClient implements IStreamingAPI {
     };
   }
 
-  protected static buildSubscribePayload(action: string, pk?: number) {
-    const payload = {
-      action: 'subscribe',
-      data: {action, pk},
+  protected static buildSubscribeSelector(stream: string, pk: number, requestId: string) {
+    return {
+      stream,
+      payload: {
+        data: {pk},
+        request_id: requestId,
+      },
     };
-
-    if (pk == null) {
-      delete payload.data.pk;
-    }
-
-    return payload;
   }
 
-  protected static buildSubscriptionSelector(stream: string, action: string, pk?: number) {
-    const selector = {
-      stream,
-      payload: {action, pk}
+  protected static buildSubscribePayload(pk: number, requestId: string) {
+    return {
+      action: 'subscribe_instance',
+      request_id: requestId,
+      pk,
     };
-
-    if (pk == null) {
-      delete selector.payload.pk;
-    }
-
-    return selector;
   }
 
   /**
    * Build a function which will take an entire JSON message and return only
    * the relevant payload (usually an object).
    */
-  protected buildListener(callback: (data: object) => void): DispatchListener<{payload: {data: any}}> {
+  protected buildListener(
+      callback: (data: {[prop: string]: any}, response: {[prop: string]: any}) => void
+  ): DispatchListener<{payload: {data: any}}>
+  {
     return (data: {payload: {data: any}}) => {
-      return callback(data.payload.data);
+      return callback(data.payload.data, data);
     };
+  }
+
+  /**
+   * Build a function which will take an entire JSON message and return only
+   * the relevant payload (usually an object).
+   */
+  protected buildSubscribeListener(
+      callback: (data: object, action: string) => void
+  ): DispatchListener<{payload: {data: any, action: string}}>
+  {
+    return this.buildListener((data, response) => {
+      const action = response.payload.action;
+      return callback(data, action);
+    })
   }
 }
 
@@ -302,10 +319,10 @@ export default {
    * @param options Configuration for DCRFClient and ReconnectingWebsocket
    */
   createClient(url: string, options: IDCRFOptions={}): DCRFClient {
-    const dispatcher = new FifoDispatcher();
-    const transport = new WebsocketTransport(url, options.websocket);
-    const queue = new FifoQueue();
-    const serializer = new JSONSerializer();
+    const dispatcher: IDispatcher = options.dispatcher || new FifoDispatcher();
+    const transport: ITransport = options.transport || new WebsocketTransport(url, options.websocket);
+    const queue: ISendQueue = options.queue || new FifoQueue();
+    const serializer: ISerializer = options.serializer || new JSONSerializer();
     return new DCRFClient(dispatcher, transport, queue, serializer, options);
   },
 };

@@ -4,5 +4,12 @@
 # npm dependencies
 node_modules
 
+# python artifacts
+*.pyc
+.pytest_cache
+
+# databases
+*.sqlite3
+
 # IntelliJ IDE files
 .idea/

@@ -7,7 +7,7 @@ export
 type DispatchListener<T> = (response: T) => any;
 
 export
-type SubscriptionHandler = (payload: object) => any;
+type SubscriptionHandler = (payload: {[prop: string]: any}, action: string) => any;
 
 
 /**
@@ -177,22 +177,26 @@ interface IStreamingAPI {
    *
    * @param stream Name of object's type stream
    * @param data Extra data to send to API
+   * @param requestId Optional value in the payload to send as request_id to the server.
+   *                  If not specified, one will be generated.
    * @return Promise resolves/rejects when response to list request received.
    *         On success, the promise will be resolved with list of objects.
    *         On failure, the promise will be rejected with the entire API response.
    */
-  list(stream: string, data?: object): Promise<object>;
+  list(stream: string, data?: object, requestId?: string): Promise<object>;
 
   /**
    * Create a new object
    *
    * @param stream Name of object's type stream
    * @param props Attributes to create on object
+   * @param requestId Optional value in the payload to send as request_id to the server.
+   *                  If not specified, one will be generated.
    * @return Promise resolves/rejects when response to creation request received.
    *         On success, the promise will be resolved with the created object.
    *         On failure, the promise will be rejected with the entire API response.
    */
-  create(stream: string, props: object): Promise<object>;
+  create(stream: string, props: object, requestId?: string): Promise<object>;
 
   /**
    * Retrieve an existing object
@@ -200,23 +204,41 @@ interface IStreamingAPI {
    * @param stream Name of object's type stream
    * @param pk ID of object to retrieve
    * @param data Extra data to send to API
+   * @param requestId Optional value in the payload to send as request_id to the server.
+   *                  If not specified, one will be generated.
    * @return Promise resolves/rejects when response to retrieval request received.
    *         On success, the promise will be resolved with the retrieved object.
    *         On failure, the promise will be rejected with the entire API response.
    */
-  retrieve(stream: string, pk: number, data?: object): Promise<object>;
+  retrieve(stream: string, pk: number, data?: object, requestId?: string): Promise<object>;
 
   /**
-   * Update an existing object
+   * Overwrite an existing object
    *
    * @param stream Name of object's type stream
    * @param pk ID of object to update
    * @param props Attributes to patch on object
+   * @param requestId Optional value in the payload to send as request_id to the server.
+   *                  If not specified, one will be generated.
    * @return Promise resolves/rejects when response to update request received.
    *         On success, the promise will be resolved with the updated object.
    *         On failure, the promise will be rejected with the entire API response.
    */
-  update(stream: string, pk: number, props: object): Promise<object>;
+  update(stream: string, pk: number, props: object, requestId?: string): Promise<object>;
+
+  /**
+   * Partially update an existing object
+   *
+   * @param stream Name of object's type stream
+   * @param pk ID of object to update
+   * @param props Attributes to patch on object
+   * @param requestId Optional value in the payload to send as request_id to the server.
+   *                  If not specified, one will be generated.
+   * @return Promise resolves/rejects when response to update request received.
+   *         On success, the promise will be resolved with the updated object.
+   *         On failure, the promise will be rejected with the entire API response.
+   */
+  patch(stream: string, pk: number, props: object, requestId?: string): Promise<object>;
 
   /**
    * Delete an existing object
@@ -224,20 +246,22 @@ interface IStreamingAPI {
    * @param stream Name of object's type stream
    * @param pk ID of object to delete
    * @param data Extra data to send to API
+   * @param requestId Optional value in the payload to send as request_id to the server.
+   *                  If not specified, one will be generated.
    * @return Promise resolves/rejects when response to deletion request received.
    *         On success, the promise will be resolved with null, or an empty object.
    *         On failure, the promise will be rejected with the entire API response.
    */
-  delete(stream: string, pk: number, data?: object): Promise<object | null>;
+  delete(stream: string, pk: number, data?: object, requestId?: string): Promise<object | null>;
 
   /**
    * Subscribe to updates
    *
    * @param stream Name of object's type stream
-   * @param action One of "create", "update", or "delete"
-   * @param pk Optional ID of specific DB object to watch. If not provided,
-   *           subscription will include *all* DB objects of the stream.
+   * @param pk ID of specific DB object to watch.
    * @param callback Function to call with payload on new events
+   * @param requestId Optional value in the payload to send as request_id to the server.
+   *                  If not specified, one will be generated.
    * @return Promise resolves/rejects when response to subscription request received.
    *         On success, the promise will be resolved with null, or an empty object.
    *         On failure, the promise will be rejected with the entire API response.
@@ -245,9 +269,9 @@ interface IStreamingAPI {
    *         to cancel the subscription.
    */
   subscribe(stream: string,
-            action: SubscriptionAction,
-            pk?: number | SubscriptionHandler,
-            callback?: SubscriptionHandler
+            pk: number | SubscriptionHandler | null,
+            callback: SubscriptionHandler,
+            requestId?: string,
   ): CancelablePromise<object | null>;
 
   /**
@@ -293,6 +317,11 @@ export type MessagePreprocessor = (message: object) => object | undefined;
 
 export
 interface IDCRFOptions {
+  dispatcher?: IDispatcher,
+  transport?: ITransport,
+  queue?: ISendQueue,
+  serializer?: ISerializer,
+
   preprocessPayload?: PayloadPreprocessor,
   preprocessMessage?: MessagePreprocessor,
 
