@@ -1,6 +1,6 @@
 {
   "name": "dcrf-client",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Websocket client for Django Channels v2 APIs powered by hishnash/djangochannelsrestframework",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -25,6 +25,9 @@
     "client"
   ],
   "author": "Zach \"theY4Kman\" Kanzler",
+  "contributors": [
+    "Sandro Salles (https://github.com/sandro-salles)"
+  ],
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/theY4Kman/dcrf-client/issues"
