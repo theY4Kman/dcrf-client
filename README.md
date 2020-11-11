@@ -102,15 +102,18 @@ const client = dcrf.connect('wss://example.com', {
   },
 
   // Options to be passed to ReconnectingWebsocket
-  // See https://github.com/pladaria/reconnecting-websocket#configure for more info
+  // See https://github.com/pladaria/reconnecting-websocket#available-options for more info
   websocket: {
-    constructor: isGlobalWebSocket() ? WebSocket : null,
-    maxReconnectionDelay: 10000,
-    minReconnectionDelay: 1500,
-    reconnectionDelayGrowFactor: 1.3,
-    connectionTimeout: 4000,
-    maxRetries: Infinity,
-    debug: false,
+    WebSocket?: any; // WebSocket constructor, if none provided, defaults to global WebSocket
+    maxReconnectionDelay?: number; // max delay in ms between reconnections
+    minReconnectionDelay?: number; // min delay in ms between reconnections
+    reconnectionDelayGrowFactor?: number; // how fast the reconnection delay grows
+    minUptime?: number; // min time in ms to consider connection as stable
+    connectionTimeout?: number; // retry connect if not connected after this time, in ms
+    maxRetries?: number; // maximum number of retries
+    maxEnqueuedMessages?: number; // maximum number of messages to buffer until reconnection
+    startClosed?: boolean; // start websocket in CLOSED state, call `.reconnect()` to connect
+    debug?: boolean; // enables debug output
   }
 });
 ```

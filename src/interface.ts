@@ -1,3 +1,5 @@
+import { Options as ReconnectingWebsocketOptions } from 'reconnecting-websocket';
+
 export
 interface IMessageEvent {
   data: string
@@ -326,12 +328,5 @@ interface IDCRFOptions {
   preprocessMessage?: MessagePreprocessor,
 
   // ReconnectingWebsocket options
-  websocket?: {
-    maxReconnectionDelay?: number,
-    minReconnectionDelay?: number,
-    reconnectionDelayGrowFactor?: number,
-    connectionTimeout?: number,
-    maxRetries?: number,
-    debug?: boolean,
-  }
+  websocket?: ReconnectingWebsocketOptions
 }
