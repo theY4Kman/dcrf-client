@@ -128,6 +128,17 @@ describe('DCRFClient', function() {
       serializer: ISerializer,
       api: DCRFClient;
 
+  const initClient = (options = {}) => {
+    dispatcher = new FifoDispatcher();
+    transport = new DummyTransport();
+    queue = new FifoQueue();
+    serializer = new DummySerializer();
+
+    const client = new DCRFClient(dispatcher, transport, queue, serializer, options);
+    client.initialize();
+    return client;
+  }
+
   class DummyTransport extends EventEmitter implements ITransport {
     send = sinon.spy();
     hasConnected = false;
@@ -143,7 +154,9 @@ describe('DCRFClient', function() {
     }) as unknown as () => boolean;
 
     disconnect = sinon.spy(() => {
+      const wasConnected = this.isConnected();
       this.isConnected.returns(false);
+      return wasConnected;
     });
     isConnected = sinon.stub().returns(false);
   }
@@ -159,13 +172,7 @@ describe('DCRFClient', function() {
   }
 
   beforeEach(function() {
-    dispatcher = new FifoDispatcher();
-    transport = new DummyTransport();
-    queue = new FifoQueue();
-    serializer = new DummySerializer();
-
-    api = new DCRFClient(dispatcher, transport, queue, serializer);
-    api.initialize();
+    api = initClient();
   });
 
 
@@ -199,8 +206,7 @@ describe('DCRFClient', function() {
         payload.unique = 'muffin';
       }) as unknown as PayloadPreprocessor;
 
-      const api = new DCRFClient(dispatcher, transport, queue, serializer, {preprocessPayload});
-      api.initialize();
+      const api = initClient({preprocessPayload});
 
       api.request('test', {});
 
@@ -215,8 +221,7 @@ describe('DCRFClient', function() {
         message.unique = 'muffin';
       }) as unknown as MessagePreprocessor;
 
-      const api = new DCRFClient(dispatcher, transport, queue, serializer, {preprocessMessage});
-      api.initialize();
+      const api = initClient({preprocessMessage});
 
       api.request('test', {});
 
@@ -286,6 +291,61 @@ describe('DCRFClient', function() {
 
       return testPromise;
     });
+
+    [
+      // Test without a custom pkField (default is "pk")
+      { pkField: 'pk' },
+      // Test with a custom pkField, with delete payload correction on
+      { pkField: 'id', ensurePkFieldInDeleteEvents: true },
+      // Test with a custom pkField, without delete payload correction on
+      { pkField: 'id', ensurePkFieldInDeleteEvents: false },
+    ].forEach(({ pkField, ensurePkFieldInDeleteEvents }) => {
+      it(`invokes callback on delete (pkField=${pkField}, ensurePkFieldInDeleteEvents=${ensurePkFieldInDeleteEvents})`, function() {
+        const api = initClient({ pkField, ensurePkFieldInDeleteEvents });
+
+        const payloadPkField = ensurePkFieldInDeleteEvents ? pkField : 'pk';
+        const id = 1337;
+        const requestId = 'fake-request-id';
+
+        const callback = sinon.spy();
+        const handler: (data: {[prop: string]: any}) => void = ({ [payloadPkField]: pk }) => callback(pk);
+        const subscription = api.subscribe('stream', id, handler, requestId);
+
+        const testPromise = subscription.then(() => {
+          const emitDelete = () => {
+            transport.emit('message', {
+              data: {
+                stream: 'stream',
+                payload: {
+                  action: 'delete',
+                  data: {
+                    pk: id,
+                  },
+                  request_id: requestId,
+                }
+              }
+            });
+          };
+
+          emitDelete();
+          expect(callback).to.have.been.calledOnce.and.calledWith(1337);
+        });
+
+        // Acknowledge our subscription
+        transport.emit('message', {
+          data: {
+            stream: 'stream',
+            payload: {
+              action: 'subscribe_instance',
+              request_id: requestId,
+              response_status: 201,
+            }
+          }
+        });
+
+        return testPromise;
+      });
+    })
 
     it('resubscribes on reconnect', function () {
       const stream = 'stream';

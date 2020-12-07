@@ -1,7 +1,9 @@
 import json
 import linecache
+import logging
 import re
 import subprocess
+import sys
 import types
 from itertools import groupby
 from pathlib import Path
@@ -10,6 +12,10 @@ from typing import Any, Dict, List
 import pytest
 from _pytest.fixtures import FuncFixtureInfo
 
+from tests.live_server import LiveServer
+
+logger = logging.getLogger(__name__)
+
 
 SCRIPT_PATH = Path(__file__)
 SCRIPT_DIR = SCRIPT_PATH.parent
@@ -17,17 +23,39 @@ MOCHA_RUNNER_PATH = SCRIPT_DIR / 'runner.ts'
 
 
 class MochaCoordinator:
-    def __init__(self):
-        self._did_start = False
+    def __init__(self, debug: bool = False, debug_port: int = 9229, debug_suspend: bool = False):
+        self.debug = debug
+        self.debug_port = debug_port
+        self.debug_suspend = debug_suspend
 
-        self.proc = subprocess.Popen(
-            args=['ts-node', MOCHA_RUNNER_PATH],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-        )
+        self._did_start = False
+        self.proc = None
+        self._init_proc()
 
         self.tests = None
         self._read_tests()
+
+    def _init_proc(self):
+        args = []
+
+        if self.debug:
+            flag = 'inspect-brk' if self.debug_suspend else 'inspect'
+            args += [
+                'node',
+                f'--{flag}={self.debug_port}',
+                '-r', 'ts-node/register',
+            ]
+        else:
+            args.append('ts-node')
+
+        args.append(MOCHA_RUNNER_PATH)
+
+        self.proc = subprocess.Popen(
+            args=args,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=sys.stderr,
+        )
 
     @property
     def did_start(self):
@@ -37,6 +65,7 @@ class MochaCoordinator:
         """Begin execution of the test suite"""
         self._write()
         self._did_start = True
+        logger.debug('Test suite started')
 
     def _read_tests(self) -> List[Dict[str, Any]]:
         if self.tests is None:
@@ -45,12 +74,13 @@ class MochaCoordinator:
         return self.tests
 
     def write(self, type, **info):
-        line = {
+        event = {
             'type': type,
             **info,
         }
-        event = json.dumps(line)
-        self._write(event)
+        line = json.dumps(event)
+        self._write(line)
+        logger.debug(f'Wrote event to Mocha: {event}')
 
     def _write(self, s: str = None):
         if s is not None:
@@ -62,9 +92,12 @@ class MochaCoordinator:
     def read(self) -> Dict[str, Any]:
         line = self.proc.stdout.readline()
         event = json.loads(line)
+        logger.debug(f'Read event from Mocha: {event}')
         return event
 
     def expect(self, *types: str) -> Dict[str, Any]:
+        logger.debug(f'Expecting event from Mocha of type(s): {",".join(types)}')
+
         event = self.read()
         if event['type'] not in types:
             str_types = ', '.join(types)
@@ -81,8 +114,10 @@ class MochaTest(pytest.Function):
 
         super().__init__(*args, **kwargs)
 
-    def _testmethod(self, live_server, **kwargs):
+    def _testmethod(self, live_server: LiveServer, **kwargs):
         coordinator.expect('test')
+
+        live_server.reload_application()
         coordinator.write('server info', url=live_server.url, ws_url=live_server.ws_url)
 
         event = coordinator.expect('pass', 'fail')
@@ -125,7 +160,7 @@ class MochaTest(pytest.Function):
             mod = types.ModuleType(file)
             exc_msg = f'{message}\n\n{stack}'
             fake_source = '\n' * (lineno - 1) + f'raise RuntimeError({exc_msg!r})'
-            co = compile(fake_source, file, "exec", dont_inherit=True)
+            co = compile(fake_source, file, 'exec', dont_inherit=True)
             exec(co, mod.__dict__)
 
 
@@ -143,7 +178,6 @@ def pytest_collection(session: pytest.Session):
             config=session.config,
             session=session,
         )
-
 
         for info in tests:
             requested_fixtures = ['live_server', '_live_server_helper']

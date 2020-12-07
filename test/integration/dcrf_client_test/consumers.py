@@ -1,3 +1,5 @@
+import logging
+
 from djangochannelsrestframework.generics import GenericAsyncAPIConsumer
 from djangochannelsrestframework.mixins import (
     ListModelMixin,
@@ -11,6 +13,8 @@ from rest_framework import serializers
 
 from dcrf_client_test.models import Thing
 
+logger = logging.getLogger(__name__)
+
 
 class ThingSerializer(serializers.ModelSerializer):
     class Meta:
@@ -20,6 +24,12 @@ class ThingSerializer(serializers.ModelSerializer):
             'name',
             'counter',
         ]
+
+
+class ThingsWithIdSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Thing
+        fields = '__all__'
 
 
 class ThingConsumer(
@@ -33,3 +43,7 @@ class ThingConsumer(
 ):
     queryset = Thing.objects.all()
     serializer_class = ThingSerializer
+
+
+class ThingsWithIdConsumer(ThingConsumer):
+    serializer_class = ThingsWithIdSerializer

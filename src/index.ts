@@ -1,7 +1,6 @@
 import autobind from 'autobind-decorator';
 import {getLogger} from 'loglevel';
-
-import UUID from './lib/UUID';
+import FifoDispatcher from './dispatchers/fifo';
 
 import {
   DispatchListener,
@@ -12,15 +11,15 @@ import {
   ISerializer,
   IStreamingAPI,
   ITransport,
-  SubscriptionAction,
   SubscriptionHandler,
 } from './interface';
 
-import {SubscriptionPromise} from './subscriptions';
-import FifoDispatcher from './dispatchers/fifo';
-import WebsocketTransport from './transports/websocket';
+import UUID from './lib/UUID';
 import FifoQueue from './send_queues/fifo';
 import JSONSerializer from './serializers/json';
+
+import {SubscriptionPromise} from './subscriptions';
+import WebsocketTransport from './transports/websocket';
 
 
 const log = getLogger('dcrf');
@@ -39,6 +38,8 @@ class DCRFClient implements IStreamingAPI {
   public readonly queue: ISendQueue;
   public readonly serializer: ISerializer;
   public readonly options: IDCRFOptions;
+  public readonly pkField: string;
+  public readonly ensurePkFieldInDeleteEvents: boolean;
 
   public readonly subscriptions: {[listenerId: number]: ISubscriptionDescriptor<any, any>};
 
@@ -62,6 +63,23 @@ class DCRFClient implements IStreamingAPI {
     this.serializer = serializer;
     this.options = options;
 
+    this.pkField = options.pkField || 'pk';
+    this.ensurePkFieldInDeleteEvents =
+        options.ensurePkFieldInDeleteEvents != null
+            ? options.ensurePkFieldInDeleteEvents
+            : true;
+
+    if (this.options.buildMultiplexedMessage)
+      this.buildMultiplexedMessage = this.options.buildMultiplexedMessage.bind(this);
+    if (this.options.buildRequestResponseSelector)
+      this.buildRequestResponseSelector = this.options.buildRequestResponseSelector.bind(this);
+    if (this.options.buildSubscribeUpdateSelector)
+      this.buildSubscribeUpdateSelector = this.options.buildSubscribeUpdateSelector.bind(this);
+    if (this.options.buildSubscribeDeleteSelector)
+      this.buildSubscribeDeleteSelector = this.options.buildSubscribeDeleteSelector.bind(this);
+    if (this.options.buildSubscribePayload)
+      this.buildSubscribePayload = this.options.buildSubscribePayload.bind(this);
+
     this.queue.initialize(this.transport.send, this.transport.isConnected);
     this.subscriptions = {};
   }
@@ -71,6 +89,14 @@ class DCRFClient implements IStreamingAPI {
     this.transport.on('message', this.handleTransportMessage);
     this.transport.on('connect', this.handleTransportConnect);
     this.transport.on('reconnect', this.handleTransportReconnect);
+  }
+
+  public close(unsubscribe: boolean = true) {
+    if (unsubscribe) {
+      this.unsubscribeAll();
+    }
+
+    this.transport.disconnect();
   }
 
   public list(stream: string, data: object={}, requestId?: string): Promise<any> {
@@ -134,20 +160,33 @@ class DCRFClient implements IStreamingAPI {
       requestId = UUID.generate();
     }
 
-    const selector = DCRFClient.buildSubscribeSelector(stream, pk, requestId);
-    const handler: (data: typeof selector & {payload: {data: any, action: string}}) => void = this.buildSubscribeListener(callback);
-    const payload = DCRFClient.buildSubscribePayload(pk, requestId);
+    const updateSelector = this.buildSubscribeUpdateSelector(stream, pk, requestId);
+    const deleteSelector = this.buildSubscribeDeleteSelector(stream, pk, requestId);
+    const handler: (data: typeof updateSelector & {payload: {data: any, action: string}}) => void =
+        this.buildSubscribeListener(callback);
+    const payload = this.buildSubscribePayload(pk, requestId);
 
-    const listenerId = this.dispatcher.listen(selector, handler);
-    const message = DCRFClient.buildMultiplexedMessage(stream, payload);
-    this.subscriptions[listenerId] = {selector, handler, message};
+    const message = this.buildMultiplexedMessage(stream, payload);
+    const updateListenerId = this.dispatcher.listen(updateSelector, handler);
+    const deleteListenerId = this.dispatcher.listen(deleteSelector, handler);
+
+    this.subscriptions[updateListenerId] = {selector: updateSelector, handler, message};
 
     const requestPromise = this.request(stream, payload, requestId);
-    const unsubscribe = this.unsubscribe.bind(this, listenerId);
+    const unsubscribe = () => {
+      this._unsubscribeUnsafe(deleteListenerId);
+      return this.unsubscribe(updateListenerId);
+    }
 
     return new SubscriptionPromise((resolve, reject) => {
       requestPromise.then(resolve, reject);
     }, unsubscribe);
+  }
+
+  public unsubscribeAll(): number {
+    const listenerIds = Object.keys(this.subscriptions).map(parseInt);
+    listenerIds.forEach(listenerId => this._unsubscribeUnsafe(listenerId));
+    return listenerIds.length;
   }
 
   /**
@@ -165,7 +204,7 @@ class DCRFClient implements IStreamingAPI {
 
   public request(stream: string, payload: object, requestId: string=UUID.generate()): Promise<any> {
     return new Promise((resolve, reject) => {
-      const selector = DCRFClient.buildRequestResponseSelector(stream, requestId);
+      const selector = this.buildRequestResponseSelector(stream, requestId);
 
       this.dispatcher.once(selector, (data: typeof selector & {payload: {response_status: number, data: any}}) => {
         const {payload: response} = data;
@@ -186,7 +225,7 @@ class DCRFClient implements IStreamingAPI {
         payload = this.options.preprocessPayload(stream, payload, requestId) || payload;
       }
 
-      let message: {stream?: string, payload?: any} = DCRFClient.buildMultiplexedMessage(stream, payload);
+      let message = this.buildMultiplexedMessage(stream, payload);
       if (this.options.preprocessMessage != null) {
         message = this.options.preprocessMessage(message) || message;
       }
@@ -209,13 +248,18 @@ class DCRFClient implements IStreamingAPI {
   }
 
   protected unsubscribe(listenerId: number): boolean {
-    // TODO: send unsubscription message (unsupported by channels-api at time of writing)
-    const found = this.subscriptions.hasOwnProperty(listenerId);
-    if (found) {
-      this.dispatcher.cancel(listenerId);
-      delete this.subscriptions[listenerId];
+    if (this.subscriptions.hasOwnProperty(listenerId)) {
+      // TODO: send unsubscription message (unsupported by channels-api at time of writing)
+      this._unsubscribeUnsafe(listenerId);
+      return true;
+    } else {
+      return false;
     }
-    return found;
+  }
+
+  protected _unsubscribeUnsafe(listenerId: number): void {
+    this.dispatcher.cancel(listenerId);
+    delete this.subscriptions[listenerId];
   }
 
   @autobind
@@ -241,32 +285,45 @@ class DCRFClient implements IStreamingAPI {
     this.queue.processQueue();
   }
 
-  protected static buildMultiplexedMessage(stream: string, payload: object) {
+  public buildMultiplexedMessage(stream: string, payload: object): object {
     return {stream, payload};
   }
 
-  protected static buildRequestResponseSelector(stream: string, requestId: string) {
+  public buildRequestResponseSelector(stream: string, requestId: string): object {
     return {
       stream,
       payload: {request_id: requestId},
     };
   }
 
-  protected static buildSubscribeSelector(stream: string, pk: number, requestId: string) {
+  public buildSubscribeUpdateSelector(stream: string, pk: number, requestId: string): object {
     return {
       stream,
       payload: {
+        action: 'update',
+        data: {[this.pkField]: pk},
+        request_id: requestId,
+      },
+    };
+  }
+
+  public buildSubscribeDeleteSelector(stream: string, pk: number, requestId: string): object {
+    return {
+      stream,
+      payload: {
+        action: 'delete',
         data: {pk},
         request_id: requestId,
       },
     };
   }
 
-  protected static buildSubscribePayload(pk: number, requestId: string) {
+  public buildSubscribePayload(pk: number, requestId: string): object {
     return {
       action: 'subscribe_instance',
       request_id: requestId,
-      pk,
+      pk,  // NOTE: the subscribe_instance action REQUIRES the literal argument `pk`.
+           //       this argument is NOT the same as the ID field of the model.
     };
   }
 
@@ -293,6 +350,17 @@ class DCRFClient implements IStreamingAPI {
   {
     return this.buildListener((data, response) => {
       const action = response.payload.action;
+
+      if (action === 'delete'
+          && this.ensurePkFieldInDeleteEvents
+          && !data.hasOwnProperty(this.pkField)
+      ) {
+        // Ensure our configured pkField is used to house primary key
+        data[this.pkField] = data.pk;
+        // And clear out `pk`
+        delete data.pk;
+      }
+
       return callback(data, action);
     })
   }

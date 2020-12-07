@@ -131,7 +131,7 @@ To run both test suites: `npm run test`
 
 To run unit tests: `npm run test:unit` or `mocha`
 
-To run integration tests: `npm run test:unit` or `py.test`
+To run integration tests: `npm run test:integration` or `py.test`
 
 
 ### How do the integration tests work?
