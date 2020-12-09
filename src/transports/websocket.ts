@@ -49,6 +49,16 @@ class WebsocketTransport extends EventEmitter implements ITransport {
   }
 
   @autobind
+  public disconnect(): boolean {
+    if (this.socket == null) {
+      return false;
+    }
+
+    this.socket.close();
+    return true;
+  }
+
+  @autobind
   public isConnected() {
     if (this.socket == null) {
       return false;

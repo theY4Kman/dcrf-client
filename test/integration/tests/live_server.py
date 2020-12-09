@@ -28,18 +28,11 @@ class LiveServer:
                     "ChannelLiveServerTestCase can not be used with in memory databases"
                 )
 
-        from django.conf import settings
-
-        if "django.contrib.staticfiles" in settings.INSTALLED_APPS:
-            application = self.static_wrapper(get_default_application())
-        else:
-            application = get_default_application()
-
         self._live_server_modified_settings = modify_settings(
             ALLOWED_HOSTS={"append": host}
         )
 
-        self._server_process = self.ProtocolServerProcess(host, application)
+        self._server_process = self.ProtocolServerProcess(host, self.get_application())
         self._server_process.start()
         self._server_process.ready.wait()
         self._host = host
@@ -47,6 +40,19 @@ class LiveServer:
 
         if not self._server_process.errors.empty():
             raise self._server_process.errors.get()
+
+    def get_application(self):
+        from django.conf import settings
+
+        if "django.contrib.staticfiles" in settings.INSTALLED_APPS:
+            application = self.static_wrapper(get_default_application())
+        else:
+            application = get_default_application()
+
+        return application
+
+    def reload_application(self):
+        self._server_process.application = self.get_application()
 
     def stop(self):
         """Stop the server"""

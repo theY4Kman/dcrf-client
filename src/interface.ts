@@ -116,6 +116,14 @@ interface ITransport {
   connect(): boolean;
 
   /**
+   * Close the transport's connection
+   *
+   * @return true if an already-established connection was closed,
+   *         false if no connection had been established in order to close
+   */
+  disconnect(): boolean;
+
+  /**
    * Whether the transport is ready to send/receive messages
    */
   isConnected(): boolean;
@@ -173,6 +181,38 @@ interface IStreamingAPI {
    * Initialize connection. Must be called before API.
    */
   initialize(): void;
+
+  /**
+   * Close the connection.
+   *
+   * @param unsubscribe Whether to cancel all subscriptions, as well. Defaults to true.
+   */
+  close(unsubscribe?: boolean): void;
+
+  /**
+   * The name of the primary key field, used to identify objects for subscriptions.
+   *
+   * NOTE: this field is used by the default buildSubscribeSelector and buildSubscribePayload
+   *       functions. If these are overridden in the DCRFClient options, this pkField value
+   *       may not be honoured.
+   */
+  readonly pkField: string;
+
+  /**
+   * Whether to ensure payloads for delete events of subscribed models include
+   * the primary key of the object in [pkField].
+   *
+   * Because payloads for delete events aren't run through the serializer,
+   * delete events *always* use `pk` to identify the object. This may differ
+   * from update events, which *are* run through the serializer, leading to
+   * more complicated logic within subscription handlers to retrieve the primary
+   * key either from `id` or `pk`, depending on whether it's update or delete.
+   *
+   * Since this can be ugly, setting this option to true (by passing it in options
+   * when instantiating the client) will ensure the configured [pkField] is always
+   * present in delete event payloads.
+   */
+  readonly ensurePkFieldInDeleteEvents: boolean;
 
   /**
    * Retrieve list of objects from stream
@@ -277,6 +317,13 @@ interface IStreamingAPI {
   ): CancelablePromise<object | null>;
 
   /**
+   * Cancel all subscriptions
+   *
+   * @return The number of subscriptions canceled.
+   */
+  unsubscribeAll(): number;
+
+  /**
    * Perform an asynchronous transaction
    *
    * @param stream Name of object's type stream
@@ -317,6 +364,85 @@ export type PayloadPreprocessor = (stream: string, payload: object, requestId: s
 export type MessagePreprocessor = (message: object) => object | undefined;
 
 
+/**
+ * Function used to format a multiplexed message (i.e. a payload routed to a stream)
+ *
+ * By default, DCRFClient simply builds an object containing: {stream, payload}
+ *
+ * @param stream The stream to send the payload to
+ * @param payload The data to send to the stream
+ */
+export type MultiplexedMessageBuilder = (stream: string, payload: object) => object;
+
+
+/**
+ * Function used to generate a selector (a pattern matching an object) for the
+ * response to an API request. Responses to API requests are generally identified
+ * by stream they belong to, and a request_id returned in the payload.
+ *
+ * By default, DCRFClient selects on: {stream, payload: {request_id: requestId}}
+ *
+ * @param stream The stream to expect the API response from
+ * @param requestId The ID of the API request to expect a response to
+ */
+export type RequestResponseSelectorBuilder = (stream: string, requestId: string) => object;
+
+
+/**
+ * Function used to generate a selector (a pattern matching an object) for an
+ * update event sent by the server due to a subscription.
+ *
+ * Note that because payloads for delete events aren't run through the
+ * serializer, delete events *always* use `pk` to identify the object. This may
+ * differ from update events, which *are* run through the serializer, and thus
+ * may have different selectors.
+ *
+ * Subscription messages are generally identified by the stream they belong to,
+ * the request_id of the original subscription request, and the ID/primary key
+ * of the object subscribed to.
+ *
+ * By default, DCRFClient selects on {stream, payload: {data: {[pkField]: pk}, request_id: requestId}}
+ *
+ * @param stream The stream to expect the subscription event from
+ * @param pk The primary key / ID of the object subscribed to
+ * @param requestId The request ID used to initiate the subscription
+ */
+export type SubscribeUpdateSelectorBuilder = (stream: string, pk: number, requestId: string) => object;
+
+
+/**
+ * Function used to generate a selector (a pattern matching an object) for a
+ * delete event sent by the server due to a subscription.
+ *
+ * Note that because payloads for delete events aren't run through the
+ * serializer, delete events *always* use `pk` to identify the object. This may
+ * differ from update events, which *are* run through the serializer, and thus
+ * may have different selectors.
+ *
+ * Subscription messages are generally identified by the stream they belong to,
+ * the request_id of the original subscription request, and the ID/primary key
+ * of the object subscribed to.
+ *
+ * By default, DCRFClient selects on {stream, payload: {data: {pk}, request_id: requestId}}
+ *
+ * @param stream The stream to expect the subscription event from
+ * @param pk The primary key / ID of the object subscribed to
+ * @param requestId The request ID used to initiate the subscription
+ */
+export type SubscribeDeleteSelectorBuilder = (stream: string, pk: number, requestId: string) => object;
+
+
+/**
+ * Function used to generate the payload for a subscription request.
+ *
+ * By default, DCRFClient builds {action: 'subscribe_instance', request_id: requestId, pk}
+ *
+ * @param pk The primary key / ID of the object to subscribe to
+ * @param requestId The request ID to use in the subscription request
+ */
+export type SubscribePayloadBuilder = (pk: number, requestId: string) => object;
+
+
 export
 interface IDCRFOptions {
   dispatcher?: IDispatcher,
@@ -326,6 +452,15 @@ interface IDCRFOptions {
 
   preprocessPayload?: PayloadPreprocessor,
   preprocessMessage?: MessagePreprocessor,
+
+  pkField?: string,
+  ensurePkFieldInDeleteEvents?: boolean,
+
+  buildMultiplexedMessage?: MultiplexedMessageBuilder,
+  buildRequestResponseSelector?: RequestResponseSelectorBuilder,
+  buildSubscribeUpdateSelector?: SubscribeUpdateSelectorBuilder,
+  buildSubscribeDeleteSelector?: SubscribeDeleteSelectorBuilder,
+  buildSubscribePayload?: SubscribePayloadBuilder,
 
   // ReconnectingWebsocket options
   websocket?: ReconnectingWebsocketOptions

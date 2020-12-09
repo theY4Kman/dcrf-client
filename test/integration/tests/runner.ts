@@ -64,7 +64,7 @@ class PytestReporter extends Mocha.reporters.Base {
    * Wait for the pytest process to give an acknowledgment over stdin
    */
   protected waitForAck() {
-    fs.readSync(0, new Buffer(1), 0, 1, null);
+    fs.readSync(0, Buffer.alloc(1), 0, 1, null);
   }
 }
 
