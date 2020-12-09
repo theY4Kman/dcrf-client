@@ -75,10 +75,132 @@ client.request('mystream', {key: 'value'}).then(response => {
 
 The client can be customized by passing an object as the second argument to `connect()` or `createClient()`. The available options are described below.
 
-```javascript
+```typescript
 const dcrf = require('dcrf-client');
 
 const client = dcrf.connect('wss://example.com', {
+  /**
+   * Options to pass along to ReconnectingWebsocket
+   *
+   * See https://github.com/pladaria/reconnecting-websocket#available-options for more info
+   */
+  websocket: {
+    WebSocket?: any; // WebSocket constructor, if none provided, defaults to global WebSocket
+    maxReconnectionDelay?: number; // max delay in ms between reconnections
+    minReconnectionDelay?: number; // min delay in ms between reconnections
+    reconnectionDelayGrowFactor?: number; // how fast the reconnection delay grows
+    minUptime?: number; // min time in ms to consider connection as stable
+    connectionTimeout?: number; // retry connect if not connected after this time, in ms
+    maxRetries?: number; // maximum number of retries
+    maxEnqueuedMessages?: number; // maximum number of messages to buffer until reconnection
+    startClosed?: boolean; // start websocket in CLOSED state, call `.reconnect()` to connect
+    debug?: boolean; // enables debug output
+  },
+
+  /**
+   * Name of serializer field is used to identify objects in subscription event payloads.
+   *
+   * Default: 'pk'
+   */
+  pkField: 'id',
+
+  /**
+   * Whether to ensure subscription delete event payloads store the primary key of the object
+   * in the configured `pkField`, instead of the default 'pk'.
+   *
+   * Because subscription delete payloads aren't run through the configured serializer (as the
+   * objects do not exist), the DCRF backend must pick a field to store the primary key of the
+   * object in the payload. DCRF chooses 'pk' for this field. If `pkField` is *not* 'pk' (and is
+   * instead, say, 'id'), then subscription update payloads will return `{id: 123}`, but delete
+   * payloads will return `{pk: 123}`.
+   *
+   * To address the potential inconsistencies between subscription update and delete payloads,
+   * setting this option to true (default) will cause dcrf-client to replace the 'pk' field with
+   * the configured `pkField` setting.
+   *
+   * Default: true
+   */
+  ensurePkFieldInDeleteEvents: true,
+
+  /**
+   * Customizes the format of a multiplexed message to be sent to the server.
+   *
+   * In almost all circumstances, the default behaviour is usually desired.
+   *
+   * The default behaviour is reproduced here.
+   */
+  buildMultiplexedMessage(stream: string, payload: object): object {
+    return {stream, payload};
+  },
+
+  /**
+   * Customizes the selector (a pattern matching an object) for the response to an API request
+   *
+   * In almost all circumstances, the default behaviour is usually desired.
+   *
+   * The default behaviour is reproduced here.
+   */
+  buildRequestResponseSelector(stream: string, requestId: string): object {
+    return {
+      stream,
+      payload: {request_id: requestId},
+    };
+  },
+
+  /**
+   * Customizes the selector (a pattern matching an object) matching a subscription update event for
+   * an object.
+   *
+   * In almost all circumstances, the default behaviour is usually desired.
+   *
+   * The default behaviour is reproduced here.
+   */
+  buildSubscribeUpdateSelector(stream: string, pk: number, requestId: string): object {
+    return {
+      stream,
+      payload: {
+        action: 'update',
+        data: {[this.pkField]: pk},
+        request_id: requestId,
+      },
+    };
+  },
+
+  /**
+   * Customizes the selector (a pattern matching an object) matching a subscription delete event for
+   * an object.
+   *
+   * In almost all circumstances, the default behaviour is usually desired.
+   *
+   * The default behaviour is reproduced here.
+   */
+  buildSubscribeDeleteSelector(stream: string, pk: number, requestId: string): object {
+    return {
+      stream,
+      payload: {
+        action: 'delete',
+        data: {pk},
+        request_id: requestId,
+      },
+    };
+  },
+
+  /**
+   * Customizes the payload sent to begin subscriptions
+   *
+   * In almost all circumstances, the default behaviour is usually desired.
+   *
+   * The default behaviour is reproduced here.
+   */
+  buildSubscribePayload(pk: number, requestId: string): object {
+    return {
+      action: 'subscribe_instance',
+      request_id: requestId,
+      pk,  // NOTE: the subscribe_instance action REQUIRES the literal argument `pk`.
+           //       this argument is NOT the same as the ID field of the model.
+    };
+  },
+
   preprocessPayload: (stream, payload, requestId) => {
     // Modify payload any way you see fit, before it's sent over the wire
     // For instance, add a custom authentication token:
@@ -100,21 +222,6 @@ const client = dcrf.connect('wss://example.com', {
     // Or, you can overwrite the the message by returning a new object:
     return {stream: 'creek', payload: 'craycrayload'};
   },
-
-  // Options to be passed to ReconnectingWebsocket
-  // See https://github.com/pladaria/reconnecting-websocket#available-options for more info
-  websocket: {
-    WebSocket?: any; // WebSocket constructor, if none provided, defaults to global WebSocket
-    maxReconnectionDelay?: number; // max delay in ms between reconnections
-    minReconnectionDelay?: number; // min delay in ms between reconnections
-    reconnectionDelayGrowFactor?: number; // how fast the reconnection delay grows
-    minUptime?: number; // min time in ms to consider connection as stable
-    connectionTimeout?: number; // retry connect if not connected after this time, in ms
-    maxRetries?: number; // maximum number of retries
-    maxEnqueuedMessages?: number; // maximum number of messages to buffer until reconnection
-    startClosed?: boolean; // start websocket in CLOSED state, call `.reconnect()` to connect
-    debug?: boolean; // enables debug output
-  }
 });
 ```
 
