@@ -31,6 +31,7 @@ interface ISubscriptionDescriptor<S, P extends S> {
   selector: S,
   handler: DispatchListener<P>,
   message: object,
+  unsubscribeMessage: object,
 }
 
 export
@@ -83,6 +84,8 @@ class DCRFClient implements IStreamingAPI {
       this.buildSubscribeDeleteSelector = this.options.buildSubscribeDeleteSelector.bind(this);
     if (this.options.buildSubscribePayload)
       this.buildSubscribePayload = this.options.buildSubscribePayload.bind(this);
+    if (this.options.buildUnsubscribePayload)
+      this.buildUnsubscribePayload = this.options.buildUnsubscribePayload.bind(this);
 
     this.queue.initialize(this.transport.send, this.transport.isConnected);
     this.subscriptions = {};
@@ -200,8 +203,10 @@ class DCRFClient implements IStreamingAPI {
     const handler: (data: typeof updateSelector & {payload: {data: any, action: string}}) => void =
         this.buildSubscribeListener(callback);
     const payload = this.buildSubscribePayload(options.subscribeAction, args, requestId);
+    const unsubscribePayload = this.buildUnsubscribePayload(options.unsubscribeAction, args, requestId);
 
     const message = this.buildMultiplexedMessage(stream, payload);
+    const unsubscribeMessage = this.buildMultiplexedMessage(stream, payload);
     const createListenerId = options.create ? this.dispatcher.listen(createSelector, handler) : null;
     const updateListenerId = this.dispatcher.listen(updateSelector, handler);
     const deleteListenerId = this.dispatcher.listen(deleteSelector, handler);
@@ -213,9 +218,10 @@ class DCRFClient implements IStreamingAPI {
     this.subscriptions[deleteListenerId] = {selector: deleteSelector, handler, message, unsubscribeMessage};
 
     const requestPromise = this.request(stream, payload, requestId);
-    const unsubscribe = () => {
+    const unsubscribe = async () => {
       const create = createListenerId ? this.unsubscribe(createListenerId) : false;
       const subbed = create || this.unsubscribe(updateListenerId) || this.unsubscribe(deleteListenerId);
+      await this.request(stream, unsubscribeMessage, requestId)
       return subbed;
     };
 
@@ -227,6 +233,20 @@ class DCRFClient implements IStreamingAPI {
   public unsubscribeAll(): number {
     const listenerIds = Object.keys(this.subscriptions).map(parseInt);
     listenerIds.forEach(listenerId => this._unsubscribeUnsafe(listenerId));
+
+    log.info('Removing %d listeners', listenerIds.length);
+
+    const subscriptions: Array<ISubscriptionDescriptor<any, any>> = Object.values(this.subscriptions);
+    const unsubscribeMessages = uniqBy(subscriptions, (s) => {
+      // @ts-ignore
+      return s.unsubscribeMessage.payload.request_id
+    });
+
+    log.info('Sending %d unsubscription requests', unsubscribeMessages.length);
+
+    for (const {unsubscribeMessage} of unsubscribeMessages) {
+      this.sendNow(unsubscribeMessage);
+    }
     return listenerIds.length;
   }
 
@@ -294,7 +314,6 @@ class DCRFClient implements IStreamingAPI {
 
   protected unsubscribe(listenerId: number): boolean {
     if (this.subscriptions.hasOwnProperty(listenerId)) {
-      // TODO: send unsubscription message (unsupported by channels-api at time of writing)
       this._unsubscribeUnsafe(listenerId);
       return true;
     } else {
@@ -372,6 +391,14 @@ class DCRFClient implements IStreamingAPI {
   }
 
   public buildSubscribePayload(action: string, args: object, requestId: string): object {
+    return {
+      action,
+      request_id: requestId,
+      ...args,
+    };
+  }
+
+  public buildUnsubscribePayload(action: string, args: object, requestId: string): object {
     return {
       action,
       request_id: requestId,

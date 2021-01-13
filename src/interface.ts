@@ -162,7 +162,7 @@ interface ICancelable {
   /**
    * @return true if canceled, false if already canceled.
    */
-  cancel(): boolean;
+  cancel(): Promise<boolean>;
 }
 
 
@@ -469,6 +469,7 @@ export type SubscribeDeleteSelectorBuilder = (stream: string, requestId: string)
  * @param requestId The request ID to use in the subscription request
  */
 export type SubscribePayloadBuilder = (action: string, args: object, requestId: string) => object;
+export type UnsubscribePayloadBuilder = (action: string, args: object, requestId: string) => object;
 
 
 export
@@ -490,6 +491,7 @@ interface IDCRFOptions {
   buildSubscribeUpdateSelector?: SubscribeUpdateSelectorBuilder,
   buildSubscribeDeleteSelector?: SubscribeDeleteSelectorBuilder,
   buildSubscribePayload?: SubscribePayloadBuilder,
+  buildUnsubscribePayload?: UnsubscribePayloadBuilder,
 
   // ReconnectingWebsocket options
   websocket?: ReconnectingWebsocketOptions
