@@ -168,6 +168,12 @@ interface ICancelable {
 
 export type CancelablePromise<T> = ICancelable & Promise<T>;
 
+export type SubscribeOptions = {
+  requestId?: string,
+  subscribeAction?: string,
+  unsubscribeAction?: string,
+  create?: boolean,
+}
 
 export type SubscriptionAction = 'create' | 'update' | 'delete';
 
@@ -300,10 +306,18 @@ interface IStreamingAPI {
    * Subscribe to updates
    *
    * @param stream Name of object's type stream
-   * @param pk ID of specific DB object to watch.
+   * @param args ID of specific DB object to watch.
    * @param callback Function to call with payload on new events
-   * @param requestId Optional value in the payload to send as request_id to the server.
-   *                  If not specified, one will be generated.
+   * @param options Optional object that may contain several optional properties.
+   *                requestId is a string property that provides a way to override the request id for messages related to this subscription.
+   *                If not specified, one will be generated.
+   *                subscribeAction is the action name string the subscribe request be sent to.
+   *                If not specified, subscribeAction will be 'subscribe_instance'.
+   *                unsubscribeAction is the action name string the unsubscribe request be sent to.
+   *                If not specified, unsubscribeAction will be 'unsubscribe_instance'.
+   *                create is a boolean property that lets subscribe know it should listen for create events.
+   *                If not specified, create is false.
+   *                options can also be a requestId string directly, for backwards compatibility.
    * @return Promise resolves/rejects when response to subscription request received.
    *         On success, the promise will be resolved with null, or an empty object.
    *         On failure, the promise will be rejected with the entire API response.
@@ -311,9 +325,9 @@ interface IStreamingAPI {
    *         to cancel the subscription.
    */
   subscribe(stream: string,
-            pk: number | SubscriptionHandler | null,
+            args: object | number,
             callback: SubscriptionHandler,
-            requestId?: string,
+            options?: SubscribeOptions | string,
   ): CancelablePromise<object | null>;
 
   /**
@@ -387,6 +401,24 @@ export type MultiplexedMessageBuilder = (stream: string, payload: object) => obj
  */
 export type RequestResponseSelectorBuilder = (stream: string, requestId: string) => object;
 
+/**
+ * Function used to generate a selector (a pattern matching an object) for an
+ * create event sent by the server due to a subscription.
+ *
+ * Note that because payloads for delete events aren't run through the
+ * serializer, delete events *always* use `pk` to identify the object. This may
+ * differ from create and update events, which *are* run through the serializer,
+ * and thus may have different selectors.
+ *
+ * Subscription messages are generally identified by the stream they belong to and
+ * the request_id of the original subscription request.
+ *
+ * By default, DCRFClient selects on {stream, request_id: requestId}}
+ *
+ * @param stream The stream to expect the subscription event from
+ * @param requestId The request ID used to initiate the subscription
+ */
+export type SubscribeCreateSelectorBuilder = (stream: string, requestId: string) => object;
 
 /**
  * Function used to generate a selector (a pattern matching an object) for an
@@ -394,42 +426,38 @@ export type RequestResponseSelectorBuilder = (stream: string, requestId: string)
  *
  * Note that because payloads for delete events aren't run through the
  * serializer, delete events *always* use `pk` to identify the object. This may
- * differ from update events, which *are* run through the serializer, and thus
- * may have different selectors.
+ * differ from create and update events, which *are* run through the serializer,
+ * and thus may have different selectors.
  *
- * Subscription messages are generally identified by the stream they belong to,
- * the request_id of the original subscription request, and the ID/primary key
- * of the object subscribed to.
+ * Subscription messages are generally identified by the stream they belong to and
+ * the request_id of the original subscription request.
  *
- * By default, DCRFClient selects on {stream, payload: {data: {[pkField]: pk}, request_id: requestId}}
+ * By default, DCRFClient selects on {stream, request_id: requestId}}
  *
  * @param stream The stream to expect the subscription event from
- * @param pk The primary key / ID of the object subscribed to
  * @param requestId The request ID used to initiate the subscription
  */
-export type SubscribeUpdateSelectorBuilder = (stream: string, pk: number, requestId: string) => object;
+export type SubscribeUpdateSelectorBuilder = (stream: string, requestId: string) => object;
 
 
 /**
- * Function used to generate a selector (a pattern matching an object) for a
+ * Function used to generate a selector (a pattern matching an object) for an
  * delete event sent by the server due to a subscription.
  *
  * Note that because payloads for delete events aren't run through the
  * serializer, delete events *always* use `pk` to identify the object. This may
- * differ from update events, which *are* run through the serializer, and thus
- * may have different selectors.
+ * differ from create and update events, which *are* run through the serializer,
+ * and thus may have different selectors.
  *
- * Subscription messages are generally identified by the stream they belong to,
- * the request_id of the original subscription request, and the ID/primary key
- * of the object subscribed to.
+ * Subscription messages are generally identified by the stream they belong to and
+ * the request_id of the original subscription request.
  *
- * By default, DCRFClient selects on {stream, payload: {data: {pk}, request_id: requestId}}
+ * By default, DCRFClient selects on {stream, request_id: requestId}}
  *
  * @param stream The stream to expect the subscription event from
- * @param pk The primary key / ID of the object subscribed to
  * @param requestId The request ID used to initiate the subscription
  */
-export type SubscribeDeleteSelectorBuilder = (stream: string, pk: number, requestId: string) => object;
+export type SubscribeDeleteSelectorBuilder = (stream: string, requestId: string) => object;
 
 
 /**
@@ -440,7 +468,7 @@ export type SubscribeDeleteSelectorBuilder = (stream: string, pk: number, reques
  * @param pk The primary key / ID of the object to subscribe to
  * @param requestId The request ID to use in the subscription request
  */
-export type SubscribePayloadBuilder = (pk: number, requestId: string) => object;
+export type SubscribePayloadBuilder = (action: string, args: object, requestId: string) => object;
 
 
 export
@@ -458,6 +486,7 @@ interface IDCRFOptions {
 
   buildMultiplexedMessage?: MultiplexedMessageBuilder,
   buildRequestResponseSelector?: RequestResponseSelectorBuilder,
+  buildSubscribeCreateSelector?: SubscribeCreateSelectorBuilder,
   buildSubscribeUpdateSelector?: SubscribeUpdateSelectorBuilder,
   buildSubscribeDeleteSelector?: SubscribeDeleteSelectorBuilder,
   buildSubscribePayload?: SubscribePayloadBuilder,
