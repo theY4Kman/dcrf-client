@@ -21,7 +21,7 @@ import JSONSerializer from './serializers/json';
 
 import {SubscriptionPromise} from './subscriptions';
 import WebsocketTransport from './transports/websocket';
-import {uniqBy} from "lodash";
+import uniqBy from "lodash.uniqby";
 
 
 const log = getLogger('dcrf');

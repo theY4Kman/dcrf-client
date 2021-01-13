@@ -59,10 +59,12 @@
     "ws": "^6.2.0"
   },
   "dependencies": {
+    "@types/lodash.uniqby": "^4.7.6",
     "autobind-decorator": "^2.4.0",
     "lodash.ismatch": "^4.4.0",
     "lodash.pull": "^4.1.0",
     "reconnecting-websocket": "^4.4.0",
+    "lodash.uniqby": "^4.7.0",
     "winston": "^3.3.3"
   }
 }
