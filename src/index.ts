@@ -21,6 +21,7 @@ import JSONSerializer from './serializers/json';
 
 import {SubscriptionPromise} from './subscriptions';
 import WebsocketTransport from './transports/websocket';
+import {uniqBy} from "lodash";
 
 
 const log = getLogger('dcrf');
@@ -233,11 +234,15 @@ class DCRFClient implements IStreamingAPI {
    * Send subscription requests for all registered subscriptions
    */
   public resubscribe() {
-    const subscriptions: Array<{message: object}> = Object.values(this.subscriptions);
+    const subscriptions: Array<ISubscriptionDescriptor<any, any>> = Object.values(this.subscriptions);
+    const resubscribeMessages = uniqBy(subscriptions, (s) => {
+      // @ts-ignore
+      return s.message.payload.request_id
+    })
 
     log.info('Resending %d subscription requests', subscriptions.length);
 
-    for (const {message} of subscriptions) {
+    for (const {message} of resubscribeMessages) {
       this.sendNow(message);
     }
   }
