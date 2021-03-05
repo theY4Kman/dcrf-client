@@ -386,9 +386,9 @@ export default {
    * @param url WebSocket URL to connect to
    * @param options Configuration for DCRFClient and ReconnectingWebsocket
    */
-  createClient(url: string, options: IDCRFOptions={}): DCRFClient {
+  createClient(url: string, protocols, options: IDCRFOptions={}): DCRFClient {
     const dispatcher: IDispatcher = options.dispatcher || new FifoDispatcher();
-    const transport: ITransport = options.transport || new WebsocketTransport(url, options.websocket);
+    const transport: ITransport = options.transport || new WebsocketTransport(url, protocols, options.websocket);
     const queue: ISendQueue = options.queue || new FifoQueue();
     const serializer: ISerializer = options.serializer || new JSONSerializer();
     return new DCRFClient(dispatcher, transport, queue, serializer, options);
