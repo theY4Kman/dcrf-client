@@ -374,8 +374,8 @@ export default {
    * @param url WebSocket URL to connect to
    * @param options Configuration for DCRFClient and ReconnectingWebsocket
    */
-  connect(url: string, options: IDCRFOptions={}): DCRFClient {
-    const client = this.createClient(url, options);
+  connect(url: string, protocols = [], options: IDCRFOptions={}): DCRFClient {
+    const client = this.createClient(url, protocols, options);
     client.initialize();
     return client;
   },
