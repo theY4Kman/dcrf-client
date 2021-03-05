@@ -24,12 +24,13 @@ class WebsocketTransport extends EventEmitter implements ITransport {
    * @param url Websocket URL to connect to
    * @param options Options to pass to ReconnectingWebsocket
    */
-  constructor(url: string, options: object={}) {
+  constructor(url: string, protocols = [], options: object={}) {
     super();
     this.url = url;
     this.options = options;
     this.socket = null;
     this.hasConnected = false;
+    this.protocols = protocols;
   }
 
   @autobind
@@ -40,7 +41,7 @@ class WebsocketTransport extends EventEmitter implements ITransport {
     }
 
     log.info('Connecting to websocket at %s', this.url);
-    this.socket = new ReconnectingWebsocket(this.url, [], this.options);
+    this.socket = new ReconnectingWebsocket(this.url, this.protocols, this.options);
 
     this.socket.addEventListener('message', this.handleMessage);
     this.socket.addEventListener('open', this.handleOpen);
