@@ -24,7 +24,7 @@ class WebsocketTransport extends EventEmitter implements ITransport {
    * @param url Websocket URL to connect to
    * @param options Options to pass to ReconnectingWebsocket
    */
-  constructor(url: string, protocols = [], options: object={}) {
+  constructor(url: string, protocols: Array=[], options: object={}) {
     super();
     this.url = url;
     this.options = options;
