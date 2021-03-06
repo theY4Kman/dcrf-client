@@ -358,7 +358,7 @@ class DCRFClient implements IStreamingAPI {
         // Ensure our configured pkField is used to house primary key
         data[this.pkField] = data.pk;
         // And clear out `pk`
-        delete data.pk;
+        delete data.pk;   
       }
 
       return callback(data, action);
@@ -374,7 +374,7 @@ export default {
    * @param url WebSocket URL to connect to
    * @param options Configuration for DCRFClient and ReconnectingWebsocket
    */
-  connect(url: string, protocols = [], options: IDCRFOptions={}): DCRFClient {
+  connect(url: string, protocols: Array=[], options: IDCRFOptions={}): DCRFClient {
     const client = this.createClient(url, protocols, options);
     client.initialize();
     return client;
@@ -386,7 +386,7 @@ export default {
    * @param url WebSocket URL to connect to
    * @param options Configuration for DCRFClient and ReconnectingWebsocket
    */
-  createClient(url: string, protocols, options: IDCRFOptions={}): DCRFClient {
+  createClient(url: string, protocols: Array, options: IDCRFOptions={}): DCRFClient {
     const dispatcher: IDispatcher = options.dispatcher || new FifoDispatcher();
     const transport: ITransport = options.transport || new WebsocketTransport(url, protocols, options.websocket);
     const queue: ISendQueue = options.queue || new FifoQueue();
