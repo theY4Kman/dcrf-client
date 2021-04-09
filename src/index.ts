@@ -206,7 +206,7 @@ class DCRFClient implements IStreamingAPI {
     const unsubscribePayload = this.buildUnsubscribePayload(options.unsubscribeAction, args, requestId);
 
     const message = this.buildMultiplexedMessage(stream, payload);
-    const unsubscribeMessage = this.buildMultiplexedMessage(stream, payload);
+    const unsubscribeMessage = this.buildMultiplexedMessage(stream, unsubscribePayload);
     const createListenerId = options.create ? this.dispatcher.listen(createSelector, handler) : null;
     const updateListenerId = this.dispatcher.listen(updateSelector, handler);
     const deleteListenerId = this.dispatcher.listen(deleteSelector, handler);
