@@ -7,7 +7,7 @@ import sys
 import types
 from itertools import groupby
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pytest
 from _pytest.fixtures import FuncFixtureInfo
@@ -91,7 +91,11 @@ class MochaCoordinator:
 
     def read(self) -> Dict[str, Any]:
         line = self.proc.stdout.readline()
-        event = json.loads(line)
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            logger.exception(f'Error parsing JSON from Mocha: {line}')
+            raise
         logger.debug(f'Read event from Mocha: {event}')
         return event
 
@@ -105,7 +109,38 @@ class MochaCoordinator:
         return event
 
 
-coordinator = MochaCoordinator()
+coordinator: Optional[MochaCoordinator] = None
+
+
+def pytest_addoption(parser):
+    group = parser.getgroup('mocha')
+    group.addoption(
+        '--mocha-debug',
+        action='store_true',
+        dest='mocha_debug',
+        default=False,
+    )
+    group.addoption(
+        '--mocha-debug-port',
+        type=int,
+        dest='mocha_debug_port',
+        default=9229,
+    )
+    group.addoption(
+        '--mocha-debug-suspend',
+        action='store_true',
+        dest='mocha_debug_suspend',
+        default=False,
+    )
+
+
+def pytest_cmdline_main(config):
+    global coordinator
+    coordinator = MochaCoordinator(
+        debug=config.option.mocha_debug,
+        debug_port=config.option.mocha_debug_port,
+        debug_suspend=config.option.mocha_debug_suspend,
+    )
 
 
 class MochaTest(pytest.Function):
