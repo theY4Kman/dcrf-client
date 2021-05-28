@@ -41,7 +41,6 @@
     "@types/deasync": "^0.1.0",
     "@types/lodash.ismatch": "^4.4.6",
     "@types/lodash.pull": "^4.1.6",
-    "@types/loglevel": "^1.5.4",
     "@types/mocha": "^5.2.6",
     "@types/node": "^11.11.4",
     "@types/sinon": "^7.0.10",
@@ -63,7 +62,7 @@
     "autobind-decorator": "^2.4.0",
     "lodash.ismatch": "^4.4.0",
     "lodash.pull": "^4.1.0",
-    "loglevel": "^1.6.1",
-    "reconnecting-websocket": "^4.4.0"
+    "reconnecting-websocket": "^4.4.0",
+    "winston": "^3.3.3"
   }
 }

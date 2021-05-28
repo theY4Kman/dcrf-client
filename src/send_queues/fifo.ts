@@ -1,6 +1,6 @@
 import autobind from 'autobind-decorator';
-import { getLogger } from 'loglevel';
 
+import { getLogger } from '../logging';
 import { ISendQueue } from '../interface';
 import BaseSendQueue from './base';
 
@@ -19,6 +19,7 @@ class FifoQueue extends BaseSendQueue implements ISendQueue {
   @autobind
   public send(bytes: string): number {
     if (this.canSend()) {
+      log.debug(`Sending bytes over the wire: ${bytes}`);
       return this.sendNow(bytes);
     } else {
       this.queueMessage(bytes);

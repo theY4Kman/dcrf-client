@@ -1,5 +1,5 @@
 import autobind from 'autobind-decorator';
-import {getLogger} from 'loglevel';
+import {getLogger} from './logging';
 import FifoDispatcher from './dispatchers/fifo';
 
 import {
@@ -264,6 +264,7 @@ class DCRFClient implements IStreamingAPI {
 
   @autobind
   protected handleTransportMessage(event: IMessageEvent) {
+    log.debug('Received message over transport: %s', event.data);
     const data = this.serializer.deserialize(event.data);
     return this.handleMessage(data);
   }
@@ -274,7 +275,7 @@ class DCRFClient implements IStreamingAPI {
 
   @autobind
   protected handleTransportConnect() {
-    log.debug('Initial API connection over transport %s', this.transport);
+    log.debug('Initial API connection over transport %s', this.transport.constructor.name);
     this.queue.processQueue();
   }
 

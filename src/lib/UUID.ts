@@ -10,7 +10,7 @@ class UUID {
   private static readonly lut: string[] = [];
 
   private static initialize(): void {
-    for (var i = 0; i < 256; i++) {
+    for (let i = 0; i < 256; i++) {
       this.lut[i] = (i < 16 ? '0' : '') + (i).toString(16);
     }
   }
