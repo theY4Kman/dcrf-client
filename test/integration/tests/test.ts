@@ -176,24 +176,8 @@ describe('DCRFClient', function() {
 
       describe('subscribe', function() {
 
-        it('invokes callback on change', function(done) {
-          expect(2);
-
-          client
-            .create(stream, {name: 'unique'})
-            .then(thing => {
-              client.subscribe(stream, thing[client.pkField], (thing, action) => {
-                expect(action).to.equal('update');
-                expect(thing.name).to.equal('new');
-                done();
-              });
-
-              client.update(stream, thing[client.pkField], {name: 'new'})
-            });
-        });
-
         it('invokes callback on delete', function(done) {
-          expect(1);
+          expect(2);
 
           client
             .create(stream, {name: 'unique'})
@@ -212,6 +196,61 @@ describe('DCRFClient', function() {
                   client.delete(stream, thing[client.pkField]);
                 });
             });
+        });
+
+        it('invokes callback on change', function(done) {
+          expect(2);
+
+          client
+            .create(stream, {name: 'unique'})
+            .then(thing => {
+              client.subscribe(stream, thing[client.pkField], (thing, action) => {
+                expect(action).to.equal('update');
+                expect(thing.name).to.equal('new');
+                done();
+              });
+
+              client.update(stream, thing[client.pkField], {name: 'new'})
+            });
+        });
+
+        it('invokes callbacks on changes to multiple objects', async function() {
+          const getUpdatedName = (name: string) => `${name}-new`;
+
+          const rows = [
+            { name: 'alpha' },
+            { name: 'bravo' },
+            { name: 'charlie' },
+          ];
+          expect(2 * rows.length);
+
+          const things = await Promise.all(rows.map(row => client.create(stream, row)));
+          const afterUpdatePromises = []
+
+          for (let thing of things) {
+            const originalName = thing.name;
+
+            let afterUpdateResolve: () => any;
+            afterUpdatePromises.push(new Promise(resolve => {
+              afterUpdateResolve = resolve;
+            }));
+
+            const callback = (afterUpdateResolve => (thing: any, action: string) => {
+              log.debug('Resolving subscription promise for %o', thing);
+              expect(action).to.equal('update');
+              expect(thing.name).to.equal(getUpdatedName(originalName));
+              afterUpdateResolve();
+              // @ts-ignore
+            })(afterUpdateResolve);
+
+            await client.subscribe(stream, thing[client.pkField], callback);
+          }
+
+          for (let thing of things) {
+            await client.update(stream, thing[client.pkField], { name: getUpdatedName(thing.name) });
+          }
+
+          await Promise.all(afterUpdatePromises);
         });
 
       });
