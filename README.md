@@ -232,7 +232,7 @@ There are two main test suites: unit tests (in `test/test.ts`) to verify intende
 
 Both suites utilize Mocha as the test runner, though the integration tests are executed through py.test, to provide a live server to make requests against.
 
-The integration tests require separate dependencies. To install them, first [install pipenv](https://pipenv.readthedocs.io/en/latest/install/#installing-pipenv), then run `pipenv install`.
+The integration tests require separate dependencies. To install them, first [install pipenv](https://pipenv.readthedocs.io/en/latest/install/#installing-pipenv), then run `pipenv install --dev`.
 
 To run both test suites: `npm run test`
 
