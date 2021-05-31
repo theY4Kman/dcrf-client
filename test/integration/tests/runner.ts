@@ -8,6 +8,22 @@ class PytestReporter extends Mocha.reporters.Base {
   constructor(runner: Mocha.Runner) {
     super(runner);
 
+    /**
+     * There is no event fired once all after/afterEach hooks have been run.
+     * To workaround this, we record the test which has just ended (that is,
+     * whose test function has completed), and when the next test starts or the
+     * entire suite completes (whichever comes first), we interpret that as all
+     * afterEach hooks having been run for the recorded test.
+     */
+    let pendingCompletionTest: Mocha.Test | null = null;
+
+    const processPendingCompletionTest = () => {
+      if (pendingCompletionTest != null) {
+        this.writeEvent('test end', this.expressTest(pendingCompletionTest));
+        pendingCompletionTest = null;
+      }
+    }
+
     runner.once('start', () => {
       const tests: object[] = [];
 
@@ -20,7 +36,12 @@ class PytestReporter extends Mocha.reporters.Base {
     });
 
     runner.on('test', (test: Mocha.Test) => {
+      processPendingCompletionTest();
       this.writeEvent('test', this.expressTest(test));
+    });
+
+    runner.on('test end', (test: Mocha.Test) => {
+      pendingCompletionTest = test;
     });
 
     runner.on('fail', (test: Mocha.Test, err) => {
@@ -36,6 +57,7 @@ class PytestReporter extends Mocha.reporters.Base {
     });
 
     runner.once('end', () => {
+      processPendingCompletionTest();
       this.writeEvent('end');
     });
   }

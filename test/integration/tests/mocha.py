@@ -156,6 +156,10 @@ class MochaTest(pytest.Function):
         coordinator.write('server info', url=live_server.url, ws_url=live_server.ws_url)
 
         event = coordinator.expect('pass', 'fail')
+
+        # Wait for all mocha after/afterEach hooks to complete
+        coordinator.expect('test end')
+
         if event['state'] == 'failed':
             message = event['err']
             stack = event['stack']
