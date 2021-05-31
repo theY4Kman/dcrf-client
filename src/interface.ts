@@ -172,7 +172,7 @@ export type SubscribeOptions = {
   requestId?: string,
   subscribeAction?: string,
   unsubscribeAction?: string,
-  create?: boolean,
+  includeCreateEvents?: boolean,
 }
 
 export type SubscriptionAction = 'create' | 'update' | 'delete';
