@@ -4,6 +4,10 @@ import path from 'path';
 import Mocha from 'mocha';
 
 
+const STDIN_FD = 0;
+const STDOUT_FD = 1;
+
+
 class PytestReporter extends Mocha.reporters.Base {
   constructor(runner: Mocha.Runner) {
     super(runner);
@@ -77,16 +81,29 @@ class PytestReporter extends Mocha.reporters.Base {
       ...event,
     };
 
-    const buffer = JSON.stringify(line);
-    process.stdout.write(buffer);
-    process.stdout.write('\n');
+    let buffer = JSON.stringify(line);
+    do {
+      let bytesWritten: number;
+      try {
+        bytesWritten = fs.writeSync(STDOUT_FD, buffer);
+      } catch (e) {
+        if (e.code === 'EAGAIN') {
+          continue;
+        } else {
+          throw e;
+        }
+      }
+
+      buffer = buffer.substr(bytesWritten);
+    } while (buffer);
+    fs.writeSync(STDOUT_FD, '\n');
   }
 
   /**
    * Wait for the pytest process to give an acknowledgment over stdin
    */
   protected waitForAck() {
-    fs.readSync(0, Buffer.alloc(1), 0, 1, null);
+    fs.readSync(STDIN_FD, Buffer.alloc(1), 0, 1, null);
   }
 }
 
