@@ -107,8 +107,8 @@ describe('DCRFClient', function() {
         return onWebsocketConnected;
       });
 
-      afterEach(function () {
-        client.close();
+      afterEach(async function () {
+        await client.close();
       })
 
       describe('create', function() {
@@ -253,7 +253,103 @@ describe('DCRFClient', function() {
           await Promise.all(afterUpdatePromises);
         });
 
-      });
-    });
+
+        describe('custom', function () {
+
+          it('invokes callback on create with includeCreateEvents', function (done) {
+            expect(2);
+
+            client.subscribe(
+              stream,
+              {},
+              (thing, action) => {
+                expect(action).to.equal('create');
+                expect(thing.name).to.equal('hello, world!');
+                done();
+              },
+              {
+                includeCreateEvents: true,
+                subscribeAction: 'subscribe_many',
+                unsubscribeAction: 'unsubscribe_many',
+              },
+            ).then(() => {
+              client.create(stream, {name: 'hello, world!'});
+            });
+          });
+
+          it("doesn't invoke callback on create w/o includeCreateEvents", function (done) {
+            expect(2);
+
+            client.subscribe(
+              stream,
+              {},
+              (thing, action) => {
+                expect(action).to.equal('update');
+                expect(thing.name).to.equal('updated');
+                done();
+              },
+              {
+                includeCreateEvents: false,
+                subscribeAction: 'subscribe_many',
+                unsubscribeAction: 'unsubscribe_many',
+              },
+            ).then(async () => {
+              const thing = await client.create(stream, {name: 'hello, world!'});
+              await client.update(stream, thing[client.pkField], {name: 'updated'});
+            });
+          });
+
+          it('invokes callback on update', function (done) {
+            expect(2);
+
+            client.create(stream, {name: 'hello, world!'}).then(thing => {
+              client.subscribe(
+                stream,
+                {},
+                (thing, action) => {
+                  expect(action).to.equal('update');
+                  expect(thing.name).to.equal('updated');
+                  done();
+                },
+                {
+                  subscribeAction: 'subscribe_many',
+                  unsubscribeAction: 'unsubscribe_many',
+                },
+              ).then(() => {
+                client.update(stream, thing[client.pkField], {name: 'updated'});
+              });
+            });
+          });
+
+          it('invokes callback on delete', function (done) {
+            expect(2);
+
+            client.create(stream, {name: 'hello, world!'}).then(thing => {
+              const originalId = thing[client.pkField];
+
+              client.subscribe(
+                stream,
+                {},
+                (thing, action) => {
+                  expect(action).to.equal('delete');
+                  expect(thing[client.pkField]).to.equal(originalId);
+                  done();
+                },
+                {
+                  subscribeAction: 'subscribe_many',
+                  unsubscribeAction: 'unsubscribe_many',
+                },
+              ).then(() => {
+                client.delete(stream, thing[client.pkField]);
+              });
+            });
+          });
+
+        }); // describe('custom')
+
+      }); // describe('subscribe')
+
+    }); // describe(stream)
   });
-});
+
+}); // describe('DCRFClient')

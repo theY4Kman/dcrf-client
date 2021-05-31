@@ -152,7 +152,6 @@ class MochaTest(pytest.Function):
     def _testmethod(self, live_server: LiveServer, **kwargs):
         coordinator.expect('test')
 
-        live_server.reload_application()
         coordinator.write('server info', url=live_server.url, ws_url=live_server.ws_url)
 
         event = coordinator.expect('pass', 'fail')
