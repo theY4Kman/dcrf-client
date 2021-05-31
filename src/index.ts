@@ -99,12 +99,16 @@ class DCRFClient implements IStreamingAPI {
     this.transport.on('reconnect', this.handleTransportReconnect);
   }
 
-  public close(unsubscribe: boolean = true) {
+  public close(unsubscribe: boolean = true): Promise<any> {
+    let promise: Promise<any>;
+
     if (unsubscribe) {
-      this.unsubscribeAll();
+      promise = this.unsubscribeAll();
+    } else {
+      promise = Promise.resolve();
     }
 
-    this.transport.disconnect();
+    return promise.then(() => {this.transport.disconnect()});
   }
 
   public list(stream: string, data: object={}, requestId?: string): Promise<any> {

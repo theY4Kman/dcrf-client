@@ -192,8 +192,10 @@ interface IStreamingAPI {
    * Close the connection.
    *
    * @param unsubscribe Whether to cancel all subscriptions, as well. Defaults to true.
+   * @return Promise Resolves when all unsubscription requests have completed, or
+   *    immediately if unsubscribe=false
    */
-  close(unsubscribe?: boolean): void;
+  close(unsubscribe?: boolean): Promise<any>;
 
   /**
    * The name of the primary key field, used to identify objects for subscriptions.
