@@ -56,7 +56,7 @@ const personalSubscription = client.subscribe('people', 1, (person, action) => {
     console.info('Person 1 was updated:', person);
   }
   else if (action === 'delete') {
-    console.info('Person 1 was deleted!')
+    console.info('Person 1 was deleted!');
   }
 });
 
@@ -68,6 +68,28 @@ personalSubscription.cancel();
 client.request('mystream', {key: 'value'}).then(response => {
   console.info('Got mystream response, yo:', response);
 });
+
+// Subscribe using a custom action
+const customSubscription = client.subscribe(
+  'people',
+  {},  // Additional arguments may be passed to action
+  (person, action) => {
+    if (action === 'create') {
+      console.info(`Person ${person.pk} was created:`, person);
+    }
+    else if (action === 'update') {
+      console.info(`Person ${person.pk} was updated:`, person);
+    }
+    else if (action === 'delete') {
+      console.info(`Person ${person.pk} was deleted!`);
+    }
+  },
+  {
+    includeCreateEvents: true,
+    subscribeAction: 'subscribe_all',
+    unsubscribeAction: 'unsubscribe_all',
+  },
+);
 ```
 
 
