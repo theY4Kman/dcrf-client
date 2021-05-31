@@ -311,6 +311,7 @@ class DCRFClient implements IStreamingAPI {
     return send(bytes);
   }
 
+  @autobind
   protected unsubscribe(listenerId: number): boolean {
     if (this.subscriptions.hasOwnProperty(listenerId)) {
       this._unsubscribeUnsafe(listenerId);
