@@ -1,4 +1,6 @@
 import autobind from 'autobind-decorator';
+import uniqBy from 'lodash.uniqby';
+
 import {getLogger} from './logging';
 import FifoDispatcher from './dispatchers/fifo';
 
@@ -11,8 +13,8 @@ import {
   ISerializer,
   IStreamingAPI,
   ITransport,
-  SubscriptionHandler,
   SubscribeOptions,
+  SubscriptionHandler,
 } from './interface';
 
 import UUID from './lib/UUID';
@@ -21,7 +23,6 @@ import JSONSerializer from './serializers/json';
 
 import {SubscriptionPromise} from './subscriptions';
 import WebsocketTransport from './transports/websocket';
-import uniqBy from "lodash.uniqby";
 
 
 const log = getLogger('dcrf');
@@ -230,24 +231,24 @@ class DCRFClient implements IStreamingAPI {
     }, unsubscribe);
   }
 
-  public unsubscribeAll(): number {
-    const listenerIds = Object.keys(this.subscriptions).map(parseInt);
-    listenerIds.forEach(listenerId => this._unsubscribeUnsafe(listenerId));
-
-    log.info('Removing %d listeners', listenerIds.length);
-
+  public unsubscribeAll(): Promise<number> {
     const subscriptions: Array<ISubscriptionDescriptor<any, any>> = Object.values(this.subscriptions);
-    const unsubscribeMessages = uniqBy(subscriptions, (s) => {
+    const unsubscribeMessages = uniqBy(subscriptions, s => {
       // @ts-ignore
-      return s.unsubscribeMessage.payload.request_id
+      return s.unsubscribeMessage?.payload?.request_id
     });
 
-    log.info('Sending %d unsubscription requests', unsubscribeMessages.length);
+    const listenerIds = Object.keys(this.subscriptions).map(parseInt);
+    log.info('Removing %d listeners', listenerIds.length);
+    listenerIds.forEach(listenerId => this._unsubscribeUnsafe(listenerId));
 
+    log.info('Sending %d unsubscription requests', unsubscribeMessages.length);
+    const unsubscriptionPromises = [];
     for (const {unsubscribeMessage} of unsubscribeMessages) {
-      this.sendNow(unsubscribeMessage);
+      const {stream, payload: {request_id, ...payload}}: any = unsubscribeMessage;
+      unsubscriptionPromises.push(this.request(stream, payload, request_id).catch(() => {}));
     }
-    return listenerIds.length;
+    return Promise.all(unsubscriptionPromises).then(() => listenerIds.length);
   }
 
   /**

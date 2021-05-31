@@ -333,9 +333,10 @@ interface IStreamingAPI {
   /**
    * Cancel all subscriptions
    *
-   * @return The number of subscriptions canceled.
+   * @return Promise resolving when all unsubscription requests have completed,
+   *    with a value representing the number of listeners removed.
    */
-  unsubscribeAll(): number;
+  unsubscribeAll(): Promise<number>;
 
   /**
    * Perform an asynchronous transaction
