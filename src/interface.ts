@@ -228,10 +228,10 @@ interface IStreamingAPI {
    * @param stream Name of object's type stream
    * @param data Extra data to send to API
    * @param requestId Optional value in the payload to send as request_id to the server.
-   *                  If not specified, one will be generated.
+   *     If not specified, one will be generated.
    * @return Promise resolves/rejects when response to list request received.
-   *         On success, the promise will be resolved with list of objects.
-   *         On failure, the promise will be rejected with the entire API response.
+   *     On success, the promise will be resolved with list of objects.
+   *     On failure, the promise will be rejected with the entire API response.
    */
   list(stream: string, data?: object, requestId?: string): Promise<object>;
 
@@ -241,10 +241,10 @@ interface IStreamingAPI {
    * @param stream Name of object's type stream
    * @param props Attributes to create on object
    * @param requestId Optional value in the payload to send as request_id to the server.
-   *                  If not specified, one will be generated.
+   *     If not specified, one will be generated.
    * @return Promise resolves/rejects when response to creation request received.
-   *         On success, the promise will be resolved with the created object.
-   *         On failure, the promise will be rejected with the entire API response.
+   *     On success, the promise will be resolved with the created object.
+   *     On failure, the promise will be rejected with the entire API response.
    */
   create(stream: string, props: object, requestId?: string): Promise<object>;
 
@@ -255,10 +255,10 @@ interface IStreamingAPI {
    * @param pk ID of object to retrieve
    * @param data Extra data to send to API
    * @param requestId Optional value in the payload to send as request_id to the server.
-   *                  If not specified, one will be generated.
+   *     If not specified, one will be generated.
    * @return Promise resolves/rejects when response to retrieval request received.
-   *         On success, the promise will be resolved with the retrieved object.
-   *         On failure, the promise will be rejected with the entire API response.
+   *     On success, the promise will be resolved with the retrieved object.
+   *     On failure, the promise will be rejected with the entire API response.
    */
   retrieve(stream: string, pk: number, data?: object, requestId?: string): Promise<object>;
 
@@ -269,10 +269,10 @@ interface IStreamingAPI {
    * @param pk ID of object to update
    * @param props Attributes to patch on object
    * @param requestId Optional value in the payload to send as request_id to the server.
-   *                  If not specified, one will be generated.
+   *    If not specified, one will be generated.
    * @return Promise resolves/rejects when response to update request received.
-   *         On success, the promise will be resolved with the updated object.
-   *         On failure, the promise will be rejected with the entire API response.
+   *     On success, the promise will be resolved with the updated object.
+   *     On failure, the promise will be rejected with the entire API response.
    */
   update(stream: string, pk: number, props: object, requestId?: string): Promise<object>;
 
@@ -283,10 +283,10 @@ interface IStreamingAPI {
    * @param pk ID of object to update
    * @param props Attributes to patch on object
    * @param requestId Optional value in the payload to send as request_id to the server.
-   *                  If not specified, one will be generated.
+   *    If not specified, one will be generated.
    * @return Promise resolves/rejects when response to update request received.
-   *         On success, the promise will be resolved with the updated object.
-   *         On failure, the promise will be rejected with the entire API response.
+   *    On success, the promise will be resolved with the updated object.
+   *    On failure, the promise will be rejected with the entire API response.
    */
   patch(stream: string, pk: number, props: object, requestId?: string): Promise<object>;
 
@@ -297,40 +297,94 @@ interface IStreamingAPI {
    * @param pk ID of object to delete
    * @param data Extra data to send to API
    * @param requestId Optional value in the payload to send as request_id to the server.
-   *                  If not specified, one will be generated.
+   *    If not specified, one will be generated.
    * @return Promise resolves/rejects when response to deletion request received.
-   *         On success, the promise will be resolved with null, or an empty object.
-   *         On failure, the promise will be rejected with the entire API response.
+   *    On success, the promise will be resolved with null, or an empty object.
+   *    On failure, the promise will be rejected with the entire API response.
    */
   delete(stream: string, pk: number, data?: object, requestId?: string): Promise<object | null>;
 
   /**
-   * Subscribe to updates
+   * Subscribe to update and delete events for an object, or perform a custom subscription
    *
    * @param stream Name of object's type stream
-   * @param args ID of specific DB object to watch.
+   * @param pk ID of specific DB object to watch
    * @param callback Function to call with payload on new events
-   * @param options Optional object that may contain several optional properties.
-   *                requestId is a string property that provides a way to override the request id for messages related to this subscription.
-   *                If not specified, one will be generated.
-   *                subscribeAction is the action name string the subscribe request be sent to.
-   *                If not specified, subscribeAction will be 'subscribe_instance'.
-   *                unsubscribeAction is the action name string the unsubscribe request be sent to.
-   *                If not specified, unsubscribeAction will be 'unsubscribe_instance'.
-   *                create is a boolean property that lets subscribe know it should listen for create events.
-   *                If not specified, create is false.
-   *                options can also be a requestId string directly, for backwards compatibility.
-   * @return Promise resolves/rejects when response to subscription request received.
-   *         On success, the promise will be resolved with null, or an empty object.
-   *         On failure, the promise will be rejected with the entire API response.
-   *         This Promise has an additional method, cancel(), which can be called
-   *         to cancel the subscription.
+   * @param options Optional object to configure the subscription
+   * @param options.requestId Specific request ID to submit with the
+   *    subscription/unsubscription request, and which will be included in
+   *    responses from DCRF. If not specified, one will be automatically generated.
+   * @param options.subscribeAction Name of action used in subscription request.
+   *    By default, 'subscribe_instance' is used.
+   * @param options.unsubscribeAction Name of action used in unsubscription request.
+   *    By default, 'unsubscribe_instance' is used.
+   * @param options.includeCreateEvents Whether to listen for creation events,
+   *    in addition to updates and deletes. By default, this is false.
+   * @return Promise Resolves/rejects when response to subscription request received.
+   *    On success, the promise will be resolved with null, or an empty object.
+   *    On failure, the promise will be rejected with the entire API response.
+   *    This Promise has an additional method, cancel(), which can be called
+   *    to cancel the subscription.
    */
-  subscribe(stream: string,
-            args: object | number,
-            callback: SubscriptionHandler,
-            options?: SubscribeOptions | string,
-  ): CancelablePromise<object | null>;
+  subscribe(stream: string, pk: number, callback: SubscriptionHandler, options?: SubscribeOptions): CancelablePromise<object | null>;
+
+  /**
+   * Subscribe to update and delete events for an object, or perform a custom subscription
+   *
+   * @param stream Name of object's type stream
+   * @param pk ID of specific DB object to watch
+   * @param callback Function to call with payload on new events
+   * @param requestId Specific request ID to submit with the subscription/unsubscription
+   *    request, and which will be included in responses from DCRF.
+   *    If not specified, one will be automatically generated.
+   * @return Promise Resolves/rejects when response to subscription request received.
+   *    On success, the promise will be resolved with null, or an empty object.
+   *    On failure, the promise will be rejected with the entire API response.
+   *    This Promise has an additional method, cancel(), which can be called
+   *    to cancel the subscription.
+   */
+  subscribe(stream: string, pk: number, callback: SubscriptionHandler, requestId?: string): CancelablePromise<object | null>;
+
+  /**
+   * Subscribe to update and delete events for an object, or perform a custom subscription
+   *
+   * @param stream Name of object's type stream
+   * @param args Identifying information to be included in subscription request
+   * @param callback Function to call with payload on new events
+   * @param options Optional object to configure the subscription
+   * @param options.requestId Specific request ID to submit with the
+   *    subscription/unsubscription request, and which will be included in
+   *    responses from DCRF. If not specified, one will be automatically generated.
+   * @param options.subscribeAction Name of action used in subscription request.
+   *    By default, 'subscribe_instance' is used.
+   * @param options.unsubscribeAction Name of action used in unsubscription request.
+   *    By default, 'unsubscribe_instance' is used.
+   * @param options.includeCreateEvents Whether to listen for creation events,
+   *    in addition to updates and deletes. By default, this is false.
+   * @return Promise Resolves/rejects when response to subscription request received.
+   *    On success, the promise will be resolved with null, or an empty object.
+   *    On failure, the promise will be rejected with the entire API response.
+   *    This Promise has an additional method, cancel(), which can be called
+   *    to cancel the subscription.
+   */
+  subscribe(stream: string, args: object, callback: SubscriptionHandler, options?: SubscribeOptions): CancelablePromise<object | null>;
+
+  /**
+   * Subscribe to update and delete events for an object, or perform a custom subscription
+   *
+   * @param stream Name of object's type stream
+   * @param args Identifying information to be included in subscription request
+   * @param callback Function to call with payload on new events
+   * @param requestId Specific request ID to submit with the subscription/unsubscription
+   *    request, and which will be included in responses from DCRF.
+   *    If not specified, one will be automatically generated.
+   * @return Promise Resolves/rejects when response to subscription request received.
+   *    On success, the promise will be resolved with null, or an empty object.
+   *    On failure, the promise will be rejected with the entire API response.
+   *    This Promise has an additional method, cancel(), which can be called
+   *    to cancel the subscription.
+   */
+  subscribe(stream: string, args: object, callback: SubscriptionHandler, requestId?: string): CancelablePromise<object | null>;
 
   /**
    * Cancel all subscriptions
@@ -345,11 +399,11 @@ interface IStreamingAPI {
    *
    * @param stream Name of object's type stream
    * @param payload Data to send as payload
-   * @param requestId Value to send as request_id to the server. If not
-   *                  specified, one will be generated.
+   * @param requestId Value to send as request_id to the server. If not specified,
+   *    one will be generated.
    * @return Promise resolves/rejects when response received.
-   *         On success, the promise will be resolved with response.data.
-   *         On failure, the promise will be rejected with the entire API response.
+   *    On success, the promise will be resolved with response.data.
+   *    On failure, the promise will be rejected with the entire API response.
    */
   request(stream: string, payload: object, requestId?: string): Promise<object>;
 }
@@ -361,10 +415,10 @@ interface IStreamingAPI {
  *
  * @param stream Name of object's type stream
  * @param payload Data which will be sent as payload. This may be mutated, as
- *                long as no value is then returned from the callback.
+ *    long as no value is then returned from the callback.
  * @param requestId Value in the payload sent as request_id to the server.
  * @return undefined to send the same payload object as passed in; or a new
- *         Object to be sent instead.
+ *    Object to be sent instead.
  *
  */
 export type PayloadPreprocessor = (stream: string, payload: object, requestId: string) => object | null;
@@ -376,7 +430,7 @@ export type PayloadPreprocessor = (stream: string, payload: object, requestId: s
  *
  * @param message The message to be sent over the wire to the server.
  * @return undefined to send the same message object as passed in (and
- *         potentially mutated); or an Object to be sent instead.
+ *    potentially mutated); or an Object to be sent instead.
  */
 export type MessagePreprocessor = (message: object) => object | undefined;
 

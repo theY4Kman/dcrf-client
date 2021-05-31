@@ -154,6 +154,12 @@ class DCRFClient implements IStreamingAPI {
     }, requestId);
   }
 
+  // Overloads
+  public subscribe(stream: string, pk: number, callback: SubscriptionHandler, options?: SubscribeOptions): SubscriptionPromise<object>;
+  public subscribe(stream: string, pk: number, callback: SubscriptionHandler, requestId?: string): SubscriptionPromise<object>;
+  public subscribe(stream: string, args: object, callback: SubscriptionHandler, options?: SubscribeOptions): SubscriptionPromise<object>;
+  public subscribe(stream: string, args: object, callback: SubscriptionHandler, requestId?: string): SubscriptionPromise<object>;
+
   public subscribe(
       stream: string,
       args: object | number,
