@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 from _pytest.fixtures import FuncFixtureInfo
+from py._path.local import LocalPath
 
 from tests.live_server import LiveServer
 
@@ -202,7 +203,7 @@ class MochaTest(pytest.Function):
             exec(co, mod.__dict__)
 
 
-class MochaFile(pytest.Item, pytest.File):
+class MochaFile(pytest.File):
     obj = None
 
 
@@ -210,18 +211,13 @@ def pytest_collection(session: pytest.Session):
     session.items = []
 
     for filename, tests in groupby(coordinator.tests, key=lambda test: test['file']):
-        file = MochaFile(
-            filename,
-            parent=session,
-            config=session.config,
-            session=session,
-        )
+        file = MochaFile.from_parent(session, fspath=LocalPath(filename))
 
         for info in tests:
             requested_fixtures = ['live_server', '_live_server_helper']
-            test = MochaTest(
+            test = MochaTest.from_parent(
+                file,
                 name='::'.join(info['parents']),
-                parent=file,
                 fixtureinfo=FuncFixtureInfo(
                     argnames=tuple(requested_fixtures),
                     initialnames=tuple(requested_fixtures),

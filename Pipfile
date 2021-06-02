@@ -5,7 +5,7 @@ verify_ssl = true
 
 [dev-packages]
 pytest = "~=6.2.1"
-pytest-django = "~=3.4.8"
+pytest-django = "~=4.3.0"
 pytest-pythonpath = "~=0.7.3"
 
 [packages]
