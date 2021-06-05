@@ -1,7 +1,10 @@
 import isMatch from 'lodash.ismatch';
 import pull from 'lodash.pull';
 
+import { getLogger } from '../logging';
 import {DispatchListener, IDispatcher} from '../interface';
+
+const log = getLogger('dcrf.dispatchers.fifo');
 
 
 type Listener<S, P extends S> = {
@@ -60,8 +63,13 @@ class FifoDispatcher implements IDispatcher {
     let matches = 0;
     listeners.forEach(({selector, handler}) => {
       if (isMatch(payload, selector)) {
+        log.debug('Matched selector %o with payload %o. Invoking handler %s',
+                  selector, payload, handler.name);
         matches++;
         handler(payload);
+      } else {
+        log.silly('Unable to match selector %o with payload %o. Not invoking handler %s',
+                  selector, payload, handler.name);
       }
     });
 

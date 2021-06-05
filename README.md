@@ -56,7 +56,7 @@ const personalSubscription = client.subscribe('people', 1, (person, action) => {
     console.info('Person 1 was updated:', person);
   }
   else if (action === 'delete') {
-    console.info('Person 1 was deleted!')
+    console.info('Person 1 was deleted!');
   }
 });
 
@@ -68,6 +68,28 @@ personalSubscription.cancel();
 client.request('mystream', {key: 'value'}).then(response => {
   console.info('Got mystream response, yo:', response);
 });
+
+// Subscribe using a custom action
+const customSubscription = client.subscribe(
+  'people',
+  {},  // Additional arguments may be passed to action
+  (person, action) => {
+    if (action === 'create') {
+      console.info(`Person ${person.pk} was created:`, person);
+    }
+    else if (action === 'update') {
+      console.info(`Person ${person.pk} was updated:`, person);
+    }
+    else if (action === 'delete') {
+      console.info(`Person ${person.pk} was deleted!`);
+    }
+  },
+  {
+    includeCreateEvents: true,
+    subscribeAction: 'subscribe_all',
+    unsubscribeAction: 'unsubscribe_all',
+  },
+);
 ```
 
 
@@ -232,13 +254,13 @@ There are two main test suites: unit tests (in `test/test.ts`) to verify intende
 
 Both suites utilize Mocha as the test runner, though the integration tests are executed through py.test, to provide a live server to make requests against.
 
-The integration tests require separate dependencies. To install them, first [install pipenv](https://pipenv.readthedocs.io/en/latest/install/#installing-pipenv), then run `pipenv install`.
+The integration tests require separate dependencies. To install them, first [install pipenv](https://pipenv.readthedocs.io/en/latest/install/#installing-pipenv), then run `pipenv install --dev`.
 
 To run both test suites: `npm run test`
 
 To run unit tests: `npm run test:unit` or `mocha`
 
-To run integration tests: `npm run test:integration` or `py.test`
+To run integration tests: `npm run test:integration` or `pipenv run py.test`
 
 
 ### How do the integration tests work?

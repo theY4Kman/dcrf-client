@@ -7,10 +7,11 @@ import sys
 import types
 from itertools import groupby
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pytest
 from _pytest.fixtures import FuncFixtureInfo
+from py._path.local import LocalPath
 
 from tests.live_server import LiveServer
 
@@ -91,7 +92,11 @@ class MochaCoordinator:
 
     def read(self) -> Dict[str, Any]:
         line = self.proc.stdout.readline()
-        event = json.loads(line)
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            logger.exception(f'Error parsing JSON from Mocha: {line}')
+            raise
         logger.debug(f'Read event from Mocha: {event}')
         return event
 
@@ -105,7 +110,38 @@ class MochaCoordinator:
         return event
 
 
-coordinator = MochaCoordinator()
+coordinator: Optional[MochaCoordinator] = None
+
+
+def pytest_addoption(parser):
+    group = parser.getgroup('mocha')
+    group.addoption(
+        '--mocha-debug',
+        action='store_true',
+        dest='mocha_debug',
+        default=False,
+    )
+    group.addoption(
+        '--mocha-debug-port',
+        type=int,
+        dest='mocha_debug_port',
+        default=9229,
+    )
+    group.addoption(
+        '--mocha-debug-suspend',
+        action='store_true',
+        dest='mocha_debug_suspend',
+        default=False,
+    )
+
+
+def pytest_cmdline_main(config):
+    global coordinator
+    coordinator = MochaCoordinator(
+        debug=config.option.mocha_debug,
+        debug_port=config.option.mocha_debug_port,
+        debug_suspend=config.option.mocha_debug_suspend,
+    )
 
 
 class MochaTest(pytest.Function):
@@ -117,10 +153,13 @@ class MochaTest(pytest.Function):
     def _testmethod(self, live_server: LiveServer, **kwargs):
         coordinator.expect('test')
 
-        live_server.reload_application()
         coordinator.write('server info', url=live_server.url, ws_url=live_server.ws_url)
 
         event = coordinator.expect('pass', 'fail')
+
+        # Wait for all mocha after/afterEach hooks to complete
+        coordinator.expect('test end')
+
         if event['state'] == 'failed':
             message = event['err']
             stack = event['stack']
@@ -164,7 +203,7 @@ class MochaTest(pytest.Function):
             exec(co, mod.__dict__)
 
 
-class MochaFile(pytest.Item, pytest.File):
+class MochaFile(pytest.File):
     obj = None
 
 
@@ -172,18 +211,13 @@ def pytest_collection(session: pytest.Session):
     session.items = []
 
     for filename, tests in groupby(coordinator.tests, key=lambda test: test['file']):
-        file = MochaFile(
-            filename,
-            parent=session,
-            config=session.config,
-            session=session,
-        )
+        file = MochaFile.from_parent(session, fspath=LocalPath(filename))
 
         for info in tests:
             requested_fixtures = ['live_server', '_live_server_helper']
-            test = MochaTest(
+            test = MochaTest.from_parent(
+                file,
                 name='::'.join(info['parents']),
-                parent=file,
                 fixtureinfo=FuncFixtureInfo(
                     argnames=tuple(requested_fixtures),
                     initialnames=tuple(requested_fixtures),

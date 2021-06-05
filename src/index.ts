@@ -1,5 +1,7 @@
 import autobind from 'autobind-decorator';
-import {getLogger} from 'loglevel';
+import uniqBy from 'lodash.uniqby';
+
+import {getLogger} from './logging';
 import FifoDispatcher from './dispatchers/fifo';
 
 import {
@@ -11,6 +13,7 @@ import {
   ISerializer,
   IStreamingAPI,
   ITransport,
+  SubscribeOptions,
   SubscriptionHandler,
 } from './interface';
 
@@ -28,7 +31,8 @@ const log = getLogger('dcrf');
 interface ISubscriptionDescriptor<S, P extends S> {
   selector: S,
   handler: DispatchListener<P>,
-  message: object,
+  subscribeMessage: object,
+  unsubscribeMessage: object,
 }
 
 export
@@ -63,22 +67,23 @@ class DCRFClient implements IStreamingAPI {
     this.serializer = serializer;
     this.options = options;
 
-    this.pkField = options.pkField || 'pk';
-    this.ensurePkFieldInDeleteEvents =
-        options.ensurePkFieldInDeleteEvents != null
-            ? options.ensurePkFieldInDeleteEvents
-            : true;
+    this.pkField = options.pkField ?? 'pk';
+    this.ensurePkFieldInDeleteEvents = options.ensurePkFieldInDeleteEvents ?? true;
 
     if (this.options.buildMultiplexedMessage)
       this.buildMultiplexedMessage = this.options.buildMultiplexedMessage.bind(this);
     if (this.options.buildRequestResponseSelector)
       this.buildRequestResponseSelector = this.options.buildRequestResponseSelector.bind(this);
+    if (this.options.buildSubscribeCreateSelector)
+      this.buildSubscribeCreateSelector = this.options.buildSubscribeCreateSelector.bind(this);
     if (this.options.buildSubscribeUpdateSelector)
       this.buildSubscribeUpdateSelector = this.options.buildSubscribeUpdateSelector.bind(this);
     if (this.options.buildSubscribeDeleteSelector)
       this.buildSubscribeDeleteSelector = this.options.buildSubscribeDeleteSelector.bind(this);
     if (this.options.buildSubscribePayload)
       this.buildSubscribePayload = this.options.buildSubscribePayload.bind(this);
+    if (this.options.buildUnsubscribePayload)
+      this.buildUnsubscribePayload = this.options.buildUnsubscribePayload.bind(this);
 
     this.queue.initialize(this.transport.send, this.transport.isConnected);
     this.subscriptions = {};
@@ -91,12 +96,16 @@ class DCRFClient implements IStreamingAPI {
     this.transport.on('reconnect', this.handleTransportReconnect);
   }
 
-  public close(unsubscribe: boolean = true) {
+  public close(unsubscribe: boolean = true): Promise<any> {
+    let promise: Promise<any>;
+
     if (unsubscribe) {
-      this.unsubscribeAll();
+      promise = this.unsubscribeAll();
+    } else {
+      promise = Promise.resolve();
     }
 
-    this.transport.disconnect();
+    return promise.then(() => {this.transport.disconnect()});
   }
 
   public list(stream: string, data: object={}, requestId?: string): Promise<any> {
@@ -145,60 +154,115 @@ class DCRFClient implements IStreamingAPI {
     }, requestId);
   }
 
+  // Overloads
+  public subscribe(stream: string, pk: number, callback: SubscriptionHandler, options?: SubscribeOptions): SubscriptionPromise<object>;
+  public subscribe(stream: string, pk: number, callback: SubscriptionHandler, requestId?: string): SubscriptionPromise<object>;
+  public subscribe(stream: string, args: object, callback: SubscriptionHandler, options?: SubscribeOptions): SubscriptionPromise<object>;
+  public subscribe(stream: string, args: object, callback: SubscriptionHandler, requestId?: string): SubscriptionPromise<object>;
+
   public subscribe(
       stream: string,
-      pk: number,
+      args: object | number,
       callback: SubscriptionHandler,
-      requestId?: string,
+      options?: SubscribeOptions | string,
   ): SubscriptionPromise<object>
   {
     if (callback == null) {
       throw new Error('callback must be provided');
     }
 
-    if (requestId == null) {
-      requestId = UUID.generate();
+    if (typeof options === 'string') {
+      options = {
+        requestId: options
+      };
     }
 
-    const updateSelector = this.buildSubscribeUpdateSelector(stream, pk, requestId);
-    const deleteSelector = this.buildSubscribeDeleteSelector(stream, pk, requestId);
-    const handler: (data: typeof updateSelector & {payload: {data: any, action: string}}) => void =
-        this.buildSubscribeListener(callback);
-    const payload = this.buildSubscribePayload(pk, requestId);
+    options = options ?? {};
+    options.includeCreateEvents = options.includeCreateEvents ?? false;
+    options.requestId = options.requestId ?? UUID.generate();
+    options.subscribeAction = options.subscribeAction ?? 'subscribe_instance';
+    options.unsubscribeAction = options.unsubscribeAction ?? 'unsubscribe_instance';
 
-    const message = this.buildMultiplexedMessage(stream, payload);
-    const updateListenerId = this.dispatcher.listen(updateSelector, handler);
-    const deleteListenerId = this.dispatcher.listen(deleteSelector, handler);
-
-    this.subscriptions[updateListenerId] = {selector: updateSelector, handler, message};
-
-    const requestPromise = this.request(stream, payload, requestId);
-    const unsubscribe = () => {
-      this._unsubscribeUnsafe(deleteListenerId);
-      return this.unsubscribe(updateListenerId);
+    if (args !== null && typeof args !== 'object') {
+      const pk = args;
+      args = {
+        [options.subscribeAction === 'subscribe_instance' ? 'pk' : this.pkField]: pk
+      };
     }
+
+    const requestId = options.requestId;
+
+    const createSelector = this.buildSubscribeCreateSelector(stream, requestId);
+    const updateSelector = this.buildSubscribeUpdateSelector(stream, requestId);
+    const deleteSelector = this.buildSubscribeDeleteSelector(stream, requestId);
+
+    const handler: (data: typeof updateSelector & {payload: {data: any, action: string}}) => void
+      = this.buildSubscribeListener(callback);
+    const subscribePayload = this.buildSubscribePayload(options.subscribeAction, args, requestId);
+    const unsubscribePayload = this.buildUnsubscribePayload(options.unsubscribeAction, args, requestId);
+
+    const subscribeMessage = this.buildMultiplexedMessage(stream, subscribePayload);
+    const unsubscribeMessage = this.buildMultiplexedMessage(stream, unsubscribePayload);
+
+    const listenerIds: number[] = [];
+    const addListener = (selector: object) => {
+      const listenerId = this.dispatcher.listen(selector, handler);
+      listenerIds.push(listenerId);
+      this.subscriptions[listenerId] = {selector, handler, subscribeMessage, unsubscribeMessage};
+    };
+
+    addListener(updateSelector);
+    addListener(deleteSelector);
+    if (options.includeCreateEvents) {
+      addListener(createSelector);
+    }
+
+    const requestPromise = this.request(stream, subscribePayload, requestId);
+    const unsubscribe = async () => {
+      const wasSubbed = listenerIds.map(this.unsubscribe).some(Boolean);
+      await this.request(stream, unsubscribePayload, requestId)
+      return wasSubbed;
+    };
 
     return new SubscriptionPromise((resolve, reject) => {
       requestPromise.then(resolve, reject);
     }, unsubscribe);
   }
 
-  public unsubscribeAll(): number {
+  public unsubscribeAll(): Promise<number> {
+    const subscriptions: Array<ISubscriptionDescriptor<any, any>> = Object.values(this.subscriptions);
+    const unsubscribeMessages = uniqBy(subscriptions, s => {
+      // @ts-ignore
+      return s.unsubscribeMessage?.payload?.request_id
+    });
+
     const listenerIds = Object.keys(this.subscriptions).map(parseInt);
+    log.info('Removing %d listeners', listenerIds.length);
     listenerIds.forEach(listenerId => this._unsubscribeUnsafe(listenerId));
-    return listenerIds.length;
+
+    log.info('Sending %d unsubscription requests', unsubscribeMessages.length);
+    const unsubscriptionPromises = [];
+    for (const {unsubscribeMessage} of unsubscribeMessages) {
+      const {stream, payload: {request_id, ...payload}}: any = unsubscribeMessage;
+      unsubscriptionPromises.push(this.request(stream, payload, request_id).catch(() => {}));
+    }
+    return Promise.all(unsubscriptionPromises).then(() => listenerIds.length);
   }
 
   /**
    * Send subscription requests for all registered subscriptions
    */
   public resubscribe() {
-    const subscriptions: Array<{message: object}> = Object.values(this.subscriptions);
+    const subscriptions: Array<ISubscriptionDescriptor<any, any>> = Object.values(this.subscriptions);
+    const resubscribeMessages = uniqBy(subscriptions, s => {
+      // @ts-ignore
+      return s.subscribeMessage?.payload?.request_id
+    });
 
     log.info('Resending %d subscription requests', subscriptions.length);
 
-    for (const {message} of subscriptions) {
-      this.sendNow(message);
+    for (const {subscribeMessage} of resubscribeMessages) {
+      this.sendNow(subscribeMessage);
     }
   }
 
@@ -247,9 +311,9 @@ class DCRFClient implements IStreamingAPI {
     return send(bytes);
   }
 
+  @autobind
   protected unsubscribe(listenerId: number): boolean {
     if (this.subscriptions.hasOwnProperty(listenerId)) {
-      // TODO: send unsubscription message (unsupported by channels-api at time of writing)
       this._unsubscribeUnsafe(listenerId);
       return true;
     } else {
@@ -264,6 +328,7 @@ class DCRFClient implements IStreamingAPI {
 
   @autobind
   protected handleTransportMessage(event: IMessageEvent) {
+    log.debug('Received message over transport: %s', event.data);
     const data = this.serializer.deserialize(event.data);
     return this.handleMessage(data);
   }
@@ -274,7 +339,7 @@ class DCRFClient implements IStreamingAPI {
 
   @autobind
   protected handleTransportConnect() {
-    log.debug('Initial API connection over transport %s', this.transport);
+    log.debug('Initial API connection over transport %s', this.transport.constructor.name);
     this.queue.processQueue();
   }
 
@@ -296,34 +361,49 @@ class DCRFClient implements IStreamingAPI {
     };
   }
 
-  public buildSubscribeUpdateSelector(stream: string, pk: number, requestId: string): object {
+  public buildSubscribeCreateSelector(stream: string, requestId: string): object {
+    return {
+      stream,
+      payload: {
+        action: 'create',
+        request_id: requestId,
+      },
+    };
+  }
+
+  public buildSubscribeUpdateSelector(stream: string, requestId: string): object {
     return {
       stream,
       payload: {
         action: 'update',
-        data: {[this.pkField]: pk},
         request_id: requestId,
       },
     };
   }
 
-  public buildSubscribeDeleteSelector(stream: string, pk: number, requestId: string): object {
+  public buildSubscribeDeleteSelector(stream: string, requestId: string): object {
     return {
       stream,
       payload: {
         action: 'delete',
-        data: {pk},
         request_id: requestId,
       },
     };
   }
 
-  public buildSubscribePayload(pk: number, requestId: string): object {
+  public buildSubscribePayload(action: string, args: object, requestId: string): object {
     return {
-      action: 'subscribe_instance',
+      action,
       request_id: requestId,
-      pk,  // NOTE: the subscribe_instance action REQUIRES the literal argument `pk`.
-           //       this argument is NOT the same as the ID field of the model.
+      ...args,
+    };
+  }
+
+  public buildUnsubscribePayload(action: string, args: object, requestId: string): object {
+    return {
+      action,
+      request_id: requestId,
+      ...args,
     };
   }
 

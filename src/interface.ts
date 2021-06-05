@@ -162,12 +162,18 @@ interface ICancelable {
   /**
    * @return true if canceled, false if already canceled.
    */
-  cancel(): boolean;
+  cancel(): Promise<boolean>;
 }
 
 
 export type CancelablePromise<T> = ICancelable & Promise<T>;
 
+export type SubscribeOptions = {
+  requestId?: string,
+  subscribeAction?: string,
+  unsubscribeAction?: string,
+  includeCreateEvents?: boolean,
+}
 
 export type SubscriptionAction = 'create' | 'update' | 'delete';
 
@@ -186,8 +192,10 @@ interface IStreamingAPI {
    * Close the connection.
    *
    * @param unsubscribe Whether to cancel all subscriptions, as well. Defaults to true.
+   * @return Promise Resolves when all unsubscription requests have completed, or
+   *    immediately if unsubscribe=false
    */
-  close(unsubscribe?: boolean): void;
+  close(unsubscribe?: boolean): Promise<any>;
 
   /**
    * The name of the primary key field, used to identify objects for subscriptions.
@@ -220,10 +228,10 @@ interface IStreamingAPI {
    * @param stream Name of object's type stream
    * @param data Extra data to send to API
    * @param requestId Optional value in the payload to send as request_id to the server.
-   *                  If not specified, one will be generated.
+   *     If not specified, one will be generated.
    * @return Promise resolves/rejects when response to list request received.
-   *         On success, the promise will be resolved with list of objects.
-   *         On failure, the promise will be rejected with the entire API response.
+   *     On success, the promise will be resolved with list of objects.
+   *     On failure, the promise will be rejected with the entire API response.
    */
   list(stream: string, data?: object, requestId?: string): Promise<object>;
 
@@ -233,10 +241,10 @@ interface IStreamingAPI {
    * @param stream Name of object's type stream
    * @param props Attributes to create on object
    * @param requestId Optional value in the payload to send as request_id to the server.
-   *                  If not specified, one will be generated.
+   *     If not specified, one will be generated.
    * @return Promise resolves/rejects when response to creation request received.
-   *         On success, the promise will be resolved with the created object.
-   *         On failure, the promise will be rejected with the entire API response.
+   *     On success, the promise will be resolved with the created object.
+   *     On failure, the promise will be rejected with the entire API response.
    */
   create(stream: string, props: object, requestId?: string): Promise<object>;
 
@@ -247,10 +255,10 @@ interface IStreamingAPI {
    * @param pk ID of object to retrieve
    * @param data Extra data to send to API
    * @param requestId Optional value in the payload to send as request_id to the server.
-   *                  If not specified, one will be generated.
+   *     If not specified, one will be generated.
    * @return Promise resolves/rejects when response to retrieval request received.
-   *         On success, the promise will be resolved with the retrieved object.
-   *         On failure, the promise will be rejected with the entire API response.
+   *     On success, the promise will be resolved with the retrieved object.
+   *     On failure, the promise will be rejected with the entire API response.
    */
   retrieve(stream: string, pk: number, data?: object, requestId?: string): Promise<object>;
 
@@ -261,10 +269,10 @@ interface IStreamingAPI {
    * @param pk ID of object to update
    * @param props Attributes to patch on object
    * @param requestId Optional value in the payload to send as request_id to the server.
-   *                  If not specified, one will be generated.
+   *    If not specified, one will be generated.
    * @return Promise resolves/rejects when response to update request received.
-   *         On success, the promise will be resolved with the updated object.
-   *         On failure, the promise will be rejected with the entire API response.
+   *     On success, the promise will be resolved with the updated object.
+   *     On failure, the promise will be rejected with the entire API response.
    */
   update(stream: string, pk: number, props: object, requestId?: string): Promise<object>;
 
@@ -275,10 +283,10 @@ interface IStreamingAPI {
    * @param pk ID of object to update
    * @param props Attributes to patch on object
    * @param requestId Optional value in the payload to send as request_id to the server.
-   *                  If not specified, one will be generated.
+   *    If not specified, one will be generated.
    * @return Promise resolves/rejects when response to update request received.
-   *         On success, the promise will be resolved with the updated object.
-   *         On failure, the promise will be rejected with the entire API response.
+   *    On success, the promise will be resolved with the updated object.
+   *    On failure, the promise will be rejected with the entire API response.
    */
   patch(stream: string, pk: number, props: object, requestId?: string): Promise<object>;
 
@@ -289,50 +297,113 @@ interface IStreamingAPI {
    * @param pk ID of object to delete
    * @param data Extra data to send to API
    * @param requestId Optional value in the payload to send as request_id to the server.
-   *                  If not specified, one will be generated.
+   *    If not specified, one will be generated.
    * @return Promise resolves/rejects when response to deletion request received.
-   *         On success, the promise will be resolved with null, or an empty object.
-   *         On failure, the promise will be rejected with the entire API response.
+   *    On success, the promise will be resolved with null, or an empty object.
+   *    On failure, the promise will be rejected with the entire API response.
    */
   delete(stream: string, pk: number, data?: object, requestId?: string): Promise<object | null>;
 
   /**
-   * Subscribe to updates
+   * Subscribe to update and delete events for an object, or perform a custom subscription
    *
    * @param stream Name of object's type stream
-   * @param pk ID of specific DB object to watch.
+   * @param pk ID of specific DB object to watch
    * @param callback Function to call with payload on new events
-   * @param requestId Optional value in the payload to send as request_id to the server.
-   *                  If not specified, one will be generated.
-   * @return Promise resolves/rejects when response to subscription request received.
-   *         On success, the promise will be resolved with null, or an empty object.
-   *         On failure, the promise will be rejected with the entire API response.
-   *         This Promise has an additional method, cancel(), which can be called
-   *         to cancel the subscription.
+   * @param options Optional object to configure the subscription
+   * @param options.requestId Specific request ID to submit with the
+   *    subscription/unsubscription request, and which will be included in
+   *    responses from DCRF. If not specified, one will be automatically generated.
+   * @param options.subscribeAction Name of action used in subscription request.
+   *    By default, 'subscribe_instance' is used.
+   * @param options.unsubscribeAction Name of action used in unsubscription request.
+   *    By default, 'unsubscribe_instance' is used.
+   * @param options.includeCreateEvents Whether to listen for creation events,
+   *    in addition to updates and deletes. By default, this is false.
+   * @return Promise Resolves/rejects when response to subscription request received.
+   *    On success, the promise will be resolved with null, or an empty object.
+   *    On failure, the promise will be rejected with the entire API response.
+   *    This Promise has an additional method, cancel(), which can be called
+   *    to cancel the subscription.
    */
-  subscribe(stream: string,
-            pk: number | SubscriptionHandler | null,
-            callback: SubscriptionHandler,
-            requestId?: string,
-  ): CancelablePromise<object | null>;
+  subscribe(stream: string, pk: number, callback: SubscriptionHandler, options?: SubscribeOptions): CancelablePromise<object | null>;
+
+  /**
+   * Subscribe to update and delete events for an object, or perform a custom subscription
+   *
+   * @param stream Name of object's type stream
+   * @param pk ID of specific DB object to watch
+   * @param callback Function to call with payload on new events
+   * @param requestId Specific request ID to submit with the subscription/unsubscription
+   *    request, and which will be included in responses from DCRF.
+   *    If not specified, one will be automatically generated.
+   * @return Promise Resolves/rejects when response to subscription request received.
+   *    On success, the promise will be resolved with null, or an empty object.
+   *    On failure, the promise will be rejected with the entire API response.
+   *    This Promise has an additional method, cancel(), which can be called
+   *    to cancel the subscription.
+   */
+  subscribe(stream: string, pk: number, callback: SubscriptionHandler, requestId?: string): CancelablePromise<object | null>;
+
+  /**
+   * Subscribe to update and delete events for an object, or perform a custom subscription
+   *
+   * @param stream Name of object's type stream
+   * @param args Identifying information to be included in subscription request
+   * @param callback Function to call with payload on new events
+   * @param options Optional object to configure the subscription
+   * @param options.requestId Specific request ID to submit with the
+   *    subscription/unsubscription request, and which will be included in
+   *    responses from DCRF. If not specified, one will be automatically generated.
+   * @param options.subscribeAction Name of action used in subscription request.
+   *    By default, 'subscribe_instance' is used.
+   * @param options.unsubscribeAction Name of action used in unsubscription request.
+   *    By default, 'unsubscribe_instance' is used.
+   * @param options.includeCreateEvents Whether to listen for creation events,
+   *    in addition to updates and deletes. By default, this is false.
+   * @return Promise Resolves/rejects when response to subscription request received.
+   *    On success, the promise will be resolved with null, or an empty object.
+   *    On failure, the promise will be rejected with the entire API response.
+   *    This Promise has an additional method, cancel(), which can be called
+   *    to cancel the subscription.
+   */
+  subscribe(stream: string, args: object, callback: SubscriptionHandler, options?: SubscribeOptions): CancelablePromise<object | null>;
+
+  /**
+   * Subscribe to update and delete events for an object, or perform a custom subscription
+   *
+   * @param stream Name of object's type stream
+   * @param args Identifying information to be included in subscription request
+   * @param callback Function to call with payload on new events
+   * @param requestId Specific request ID to submit with the subscription/unsubscription
+   *    request, and which will be included in responses from DCRF.
+   *    If not specified, one will be automatically generated.
+   * @return Promise Resolves/rejects when response to subscription request received.
+   *    On success, the promise will be resolved with null, or an empty object.
+   *    On failure, the promise will be rejected with the entire API response.
+   *    This Promise has an additional method, cancel(), which can be called
+   *    to cancel the subscription.
+   */
+  subscribe(stream: string, args: object, callback: SubscriptionHandler, requestId?: string): CancelablePromise<object | null>;
 
   /**
    * Cancel all subscriptions
    *
-   * @return The number of subscriptions canceled.
+   * @return Promise resolving when all unsubscription requests have completed,
+   *    with a value representing the number of listeners removed.
    */
-  unsubscribeAll(): number;
+  unsubscribeAll(): Promise<number>;
 
   /**
    * Perform an asynchronous transaction
    *
    * @param stream Name of object's type stream
    * @param payload Data to send as payload
-   * @param requestId Value to send as request_id to the server. If not
-   *                  specified, one will be generated.
+   * @param requestId Value to send as request_id to the server. If not specified,
+   *    one will be generated.
    * @return Promise resolves/rejects when response received.
-   *         On success, the promise will be resolved with response.data.
-   *         On failure, the promise will be rejected with the entire API response.
+   *    On success, the promise will be resolved with response.data.
+   *    On failure, the promise will be rejected with the entire API response.
    */
   request(stream: string, payload: object, requestId?: string): Promise<object>;
 }
@@ -344,10 +415,10 @@ interface IStreamingAPI {
  *
  * @param stream Name of object's type stream
  * @param payload Data which will be sent as payload. This may be mutated, as
- *                long as no value is then returned from the callback.
+ *    long as no value is then returned from the callback.
  * @param requestId Value in the payload sent as request_id to the server.
  * @return undefined to send the same payload object as passed in; or a new
- *         Object to be sent instead.
+ *    Object to be sent instead.
  *
  */
 export type PayloadPreprocessor = (stream: string, payload: object, requestId: string) => object | null;
@@ -359,7 +430,7 @@ export type PayloadPreprocessor = (stream: string, payload: object, requestId: s
  *
  * @param message The message to be sent over the wire to the server.
  * @return undefined to send the same message object as passed in (and
- *         potentially mutated); or an Object to be sent instead.
+ *    potentially mutated); or an Object to be sent instead.
  */
 export type MessagePreprocessor = (message: object) => object | undefined;
 
@@ -387,6 +458,24 @@ export type MultiplexedMessageBuilder = (stream: string, payload: object) => obj
  */
 export type RequestResponseSelectorBuilder = (stream: string, requestId: string) => object;
 
+/**
+ * Function used to generate a selector (a pattern matching an object) for an
+ * create event sent by the server due to a subscription.
+ *
+ * Note that because payloads for delete events aren't run through the
+ * serializer, delete events *always* use `pk` to identify the object. This may
+ * differ from create and update events, which *are* run through the serializer,
+ * and thus may have different selectors.
+ *
+ * Subscription messages are generally identified by the stream they belong to and
+ * the request_id of the original subscription request.
+ *
+ * By default, DCRFClient selects on {stream, request_id: requestId}}
+ *
+ * @param stream The stream to expect the subscription event from
+ * @param requestId The request ID used to initiate the subscription
+ */
+export type SubscribeCreateSelectorBuilder = (stream: string, requestId: string) => object;
 
 /**
  * Function used to generate a selector (a pattern matching an object) for an
@@ -394,42 +483,38 @@ export type RequestResponseSelectorBuilder = (stream: string, requestId: string)
  *
  * Note that because payloads for delete events aren't run through the
  * serializer, delete events *always* use `pk` to identify the object. This may
- * differ from update events, which *are* run through the serializer, and thus
- * may have different selectors.
+ * differ from create and update events, which *are* run through the serializer,
+ * and thus may have different selectors.
  *
- * Subscription messages are generally identified by the stream they belong to,
- * the request_id of the original subscription request, and the ID/primary key
- * of the object subscribed to.
+ * Subscription messages are generally identified by the stream they belong to and
+ * the request_id of the original subscription request.
  *
- * By default, DCRFClient selects on {stream, payload: {data: {[pkField]: pk}, request_id: requestId}}
+ * By default, DCRFClient selects on {stream, request_id: requestId}}
  *
  * @param stream The stream to expect the subscription event from
- * @param pk The primary key / ID of the object subscribed to
  * @param requestId The request ID used to initiate the subscription
  */
-export type SubscribeUpdateSelectorBuilder = (stream: string, pk: number, requestId: string) => object;
+export type SubscribeUpdateSelectorBuilder = (stream: string, requestId: string) => object;
 
 
 /**
- * Function used to generate a selector (a pattern matching an object) for a
+ * Function used to generate a selector (a pattern matching an object) for an
  * delete event sent by the server due to a subscription.
  *
  * Note that because payloads for delete events aren't run through the
  * serializer, delete events *always* use `pk` to identify the object. This may
- * differ from update events, which *are* run through the serializer, and thus
- * may have different selectors.
+ * differ from create and update events, which *are* run through the serializer,
+ * and thus may have different selectors.
  *
- * Subscription messages are generally identified by the stream they belong to,
- * the request_id of the original subscription request, and the ID/primary key
- * of the object subscribed to.
+ * Subscription messages are generally identified by the stream they belong to and
+ * the request_id of the original subscription request.
  *
- * By default, DCRFClient selects on {stream, payload: {data: {pk}, request_id: requestId}}
+ * By default, DCRFClient selects on {stream, request_id: requestId}}
  *
  * @param stream The stream to expect the subscription event from
- * @param pk The primary key / ID of the object subscribed to
  * @param requestId The request ID used to initiate the subscription
  */
-export type SubscribeDeleteSelectorBuilder = (stream: string, pk: number, requestId: string) => object;
+export type SubscribeDeleteSelectorBuilder = (stream: string, requestId: string) => object;
 
 
 /**
@@ -440,7 +525,8 @@ export type SubscribeDeleteSelectorBuilder = (stream: string, pk: number, reques
  * @param pk The primary key / ID of the object to subscribe to
  * @param requestId The request ID to use in the subscription request
  */
-export type SubscribePayloadBuilder = (pk: number, requestId: string) => object;
+export type SubscribePayloadBuilder = (action: string, args: object, requestId: string) => object;
+export type UnsubscribePayloadBuilder = (action: string, args: object, requestId: string) => object;
 
 
 export
@@ -458,9 +544,11 @@ interface IDCRFOptions {
 
   buildMultiplexedMessage?: MultiplexedMessageBuilder,
   buildRequestResponseSelector?: RequestResponseSelectorBuilder,
+  buildSubscribeCreateSelector?: SubscribeCreateSelectorBuilder,
   buildSubscribeUpdateSelector?: SubscribeUpdateSelectorBuilder,
   buildSubscribeDeleteSelector?: SubscribeDeleteSelectorBuilder,
   buildSubscribePayload?: SubscribePayloadBuilder,
+  buildUnsubscribePayload?: UnsubscribePayloadBuilder,
 
   // ReconnectingWebsocket options
   websocket?: ReconnectingWebsocketOptions

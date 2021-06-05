@@ -2,12 +2,33 @@ import fs from "fs";
 
 import chai, {expect} from 'chai';
 import chaiSubset from 'chai-subset';
+import {format, transports} from 'winston';
 chai.use(chaiSubset);
+
+import {rootLogger, getLogger} from '../../../src/logging';
+
+// Enable all logging
+rootLogger.level = 'debug';
+// Print all logs to stderr, so pytest may parrot them
+rootLogger
+  .clear()
+  .add(new transports.Console({
+    level: 'silly',
+    stderrLevels: Object.keys(rootLogger.levels),
+  }));
+// And colorize, for style
+rootLogger.format = format.combine(
+  format.colorize(),
+  rootLogger.format,
+);
 
 import WebSocket from 'ws';
 
 import dcrf, {DCRFClient} from '../../../src/';
 import {DCRFGlobal} from '../../global';
+
+
+const log = getLogger('dcrf.test.integration');
 
 
 declare const global: DCRFGlobal;
@@ -86,8 +107,8 @@ describe('DCRFClient', function() {
         return onWebsocketConnected;
       });
 
-      afterEach(function () {
-        client.close();
+      afterEach(async function () {
+        await client.close();
       })
 
       describe('create', function() {
@@ -155,24 +176,8 @@ describe('DCRFClient', function() {
 
       describe('subscribe', function() {
 
-        it('invokes callback on change', function(done) {
-          expect(2);
-
-          client
-            .create(stream, {name: 'unique'})
-            .then(thing => {
-              client.subscribe(stream, thing[client.pkField], (thing, action) => {
-                expect(action).to.equal('update');
-                expect(thing.name).to.equal('new');
-                done();
-              });
-
-              client.update(stream, thing[client.pkField], {name: 'new'})
-            });
-        });
-
         it('invokes callback on delete', function(done) {
-          expect(1);
+          expect(2);
 
           client
             .create(stream, {name: 'unique'})
@@ -193,7 +198,158 @@ describe('DCRFClient', function() {
             });
         });
 
-      });
-    });
+        it('invokes callback on change', function(done) {
+          expect(2);
+
+          client
+            .create(stream, {name: 'unique'})
+            .then(thing => {
+              client.subscribe(stream, thing[client.pkField], (thing, action) => {
+                expect(action).to.equal('update');
+                expect(thing.name).to.equal('new');
+                done();
+              });
+
+              client.update(stream, thing[client.pkField], {name: 'new'})
+            });
+        });
+
+        it('invokes callbacks on changes to multiple objects', async function() {
+          const getUpdatedName = (name: string) => `${name}-new`;
+
+          const rows = [
+            { name: 'alpha' },
+            { name: 'bravo' },
+            { name: 'charlie' },
+          ];
+          expect(2 * rows.length);
+
+          const things = await Promise.all(rows.map(row => client.create(stream, row)));
+          const afterUpdatePromises = []
+
+          for (let thing of things) {
+            const originalName = thing.name;
+
+            let afterUpdateResolve: () => any;
+            afterUpdatePromises.push(new Promise(resolve => {
+              afterUpdateResolve = resolve;
+            }));
+
+            const callback = (afterUpdateResolve => (thing: any, action: string) => {
+              log.debug('Resolving subscription promise for %o', thing);
+              expect(action).to.equal('update');
+              expect(thing.name).to.equal(getUpdatedName(originalName));
+              afterUpdateResolve();
+              // @ts-ignore
+            })(afterUpdateResolve);
+
+            await client.subscribe(stream, thing[client.pkField], callback);
+          }
+
+          for (let thing of things) {
+            await client.update(stream, thing[client.pkField], { name: getUpdatedName(thing.name) });
+          }
+
+          await Promise.all(afterUpdatePromises);
+        });
+
+
+        describe('custom', function () {
+
+          it('invokes callback on create with includeCreateEvents', function (done) {
+            expect(2);
+
+            client.subscribe(
+              stream,
+              {},
+              (thing, action) => {
+                expect(action).to.equal('create');
+                expect(thing.name).to.equal('hello, world!');
+                done();
+              },
+              {
+                includeCreateEvents: true,
+                subscribeAction: 'subscribe_many',
+                unsubscribeAction: 'unsubscribe_many',
+              },
+            ).then(() => {
+              client.create(stream, {name: 'hello, world!'});
+            });
+          });
+
+          it("doesn't invoke callback on create w/o includeCreateEvents", function (done) {
+            expect(2);
+
+            client.subscribe(
+              stream,
+              {},
+              (thing, action) => {
+                expect(action).to.equal('update');
+                expect(thing.name).to.equal('updated');
+                done();
+              },
+              {
+                includeCreateEvents: false,
+                subscribeAction: 'subscribe_many',
+                unsubscribeAction: 'unsubscribe_many',
+              },
+            ).then(async () => {
+              const thing = await client.create(stream, {name: 'hello, world!'});
+              await client.update(stream, thing[client.pkField], {name: 'updated'});
+            });
+          });
+
+          it('invokes callback on update', function (done) {
+            expect(2);
+
+            client.create(stream, {name: 'hello, world!'}).then(thing => {
+              client.subscribe(
+                stream,
+                {},
+                (thing, action) => {
+                  expect(action).to.equal('update');
+                  expect(thing.name).to.equal('updated');
+                  done();
+                },
+                {
+                  subscribeAction: 'subscribe_many',
+                  unsubscribeAction: 'unsubscribe_many',
+                },
+              ).then(() => {
+                client.update(stream, thing[client.pkField], {name: 'updated'});
+              });
+            });
+          });
+
+          it('invokes callback on delete', function (done) {
+            expect(2);
+
+            client.create(stream, {name: 'hello, world!'}).then(thing => {
+              const originalId = thing[client.pkField];
+
+              client.subscribe(
+                stream,
+                {},
+                (thing, action) => {
+                  expect(action).to.equal('delete');
+                  expect(thing[client.pkField]).to.equal(originalId);
+                  done();
+                },
+                {
+                  subscribeAction: 'subscribe_many',
+                  unsubscribeAction: 'unsubscribe_many',
+                },
+              ).then(() => {
+                client.delete(stream, thing[client.pkField]);
+              });
+            });
+          });
+
+        }); // describe('custom')
+
+      }); // describe('subscribe')
+
+    }); // describe(stream)
   });
-});
+
+}); // describe('DCRFClient')

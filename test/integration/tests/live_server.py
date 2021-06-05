@@ -44,15 +44,12 @@ class LiveServer:
     def get_application(self):
         from django.conf import settings
 
+        application = get_default_application()
+
         if "django.contrib.staticfiles" in settings.INSTALLED_APPS:
-            application = self.static_wrapper(get_default_application())
-        else:
-            application = get_default_application()
+            application = self.static_wrapper(application)
 
         return application
-
-    def reload_application(self):
-        self._server_process.application = self.get_application()
 
     def stop(self):
         """Stop the server"""
