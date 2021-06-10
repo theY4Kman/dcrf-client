@@ -231,6 +231,13 @@ def pytest_collection(session: pytest.Session):
 
             session.items.append(test)
 
+    ###
+    # NOTE: if this counter remains 0 at end of session, an exit code of 5 will be returned.
+    #       This value is normally set by Session.perform_collect(), but we are bypassing that
+    #       implementation.
+    #
+    session.testscollected = len(session.items)
+
     return session.items
 
 
