@@ -271,6 +271,8 @@ Our pytest-mocha plugin first spawns a subprocess to a custom Mocha runner, whic
 
 pytest-mocha then spins up a live Daphne server for the tests to utilize. Before each test, the Mocha suite emits another JSON message informing pytest-mocha which test is about to run. pytest-mocha replies with the connection info in JSON format to the Mocha runner's stdin. The Mocha suite uses this to initialize a DCRFClient for each test.
 
-At the end of each test, Mocha emits a "test ended" message. pytest-mocha then wipes the database (with the help of pytest-django) for the next test run.
+At the end of each test, our custom Mocha runner emits a "test ended" message. pytest-mocha then wipes the database (with the help of pytest-django) for the next test run.
 
-NOTE: this is sorta complicated and brittle. it would be nice to refactor this into something more robust. at least for now it provides some assurance the client interacts with the server properly, and also serves as an example for properly setting up a Django Channels project.
+(Note that technically, Mocha's "test end" event is somewhat misleading, and isn't used directly to denote test end. Mocha's "test end" demarcates when the test _method_ has completed, but not any `afterEach` hooks. Since we use an `afterEach` hook to unsubscribe all subscriptions from the DCRFClient, care must be taken to ensure the DB remains unwiped and test server remains up until the `afterEach` hook has culminated. To this end, we actually emit our "test ended" message right before the next test starts, or the suite ends. See [mochajs/mocha#1860](https://github.com/mochajs/mocha/issues/1860). The logic is inspired by [the workaround](https://github.com/JetBrains/mocha-intellij/commit/03345ee49688e0bca875cba533141c417cefb625) used in JetBrains's mocha-intellij)
+
+NOTE: this is sorta complicated and brittle. it would be nice to refactor this into something more robust. at least for now it provides some assurance the client interacts with the server properly, and also sorta serves as an example for properly setting up a Django Channels REST Framework project.
