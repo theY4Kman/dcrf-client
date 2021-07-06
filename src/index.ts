@@ -13,6 +13,8 @@ import {
   ISerializer,
   IStreamingAPI,
   ITransport,
+  RequestMultipleCancel,
+  RequestMultipleHandler,
   SubscribeOptions,
   SubscriptionHandler,
 } from './interface';
@@ -296,6 +298,26 @@ class DCRFClient implements IStreamingAPI {
 
       this.send(message);
     });
+  }
+
+  public requestMultiple(stream: string, payload: object, requestId: string = UUID.generate(), callback: RequestMultipleHandler): RequestMultipleCancel {
+    const selector = this.buildRequestResponseSelector(stream, requestId);
+
+    const listenerId = this.dispatcher.listen(selector, (data: typeof selector & { payload: { response_status: number, data: any } }) => {
+      const {payload: response} = data;
+      const responseStatus = response.response_status;
+
+      // 2xx is success
+      if (Math.floor(responseStatus / 100) === 2) {
+        callback(null, response.data);
+      } else {
+        callback(response, null);
+      }
+    });
+
+    return () => {
+      this.dispatcher.cancel(listenerId);
+    };
   }
 
   public send(object: object) {

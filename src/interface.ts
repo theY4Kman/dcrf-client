@@ -11,6 +11,11 @@ type DispatchListener<T> = (response: T) => any;
 export
 type SubscriptionHandler = (payload: {[prop: string]: any}, action: string) => any;
 
+export
+type RequestMultipleHandler = (error: {response_status: number, data: any} | null, payload: {[prop: string]: any} | null) => any;
+
+export
+type RequestMultipleCancel = () => void;
 
 /**
  * Calls all handlers whose selectors match an incoming payload.
