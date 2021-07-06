@@ -411,6 +411,8 @@ interface IStreamingAPI {
    *    On failure, the promise will be rejected with the entire API response.
    */
   request(stream: string, payload: object, requestId?: string): Promise<object>;
+
+  requestMultiple(stream: string, payload: object, callback:RequestMultipleHandler, requestId?: string): RequestMultipleCancel;
 }
 
 

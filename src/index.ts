@@ -300,7 +300,7 @@ class DCRFClient implements IStreamingAPI {
     });
   }
 
-  public requestMultiple(stream: string, payload: object, requestId: string = UUID.generate(), callback: RequestMultipleHandler): RequestMultipleCancel {
+  public requestMultiple(stream: string, payload: object, callback: RequestMultipleHandler, requestId: string = UUID.generate()): RequestMultipleCancel {
     const selector = this.buildRequestResponseSelector(stream, requestId);
 
     const listenerId = this.dispatcher.listen(selector, (data: typeof selector & { payload: { response_status: number, data: any } }) => {
