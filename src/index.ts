@@ -268,6 +268,22 @@ class DCRFClient implements IStreamingAPI {
     }
   }
 
+  private sendRequest(payload: object, requestId: string, stream: string) {
+    payload = Object.assign({}, payload, {request_id: requestId});
+    if (this.options.preprocessPayload != null) {
+      // Note: this and the preprocessMessage handler below presume an object will be returned.
+      //       If you really want to return a 0, you're kinda SOL -- wrap it in an object :P
+      payload = this.options.preprocessPayload(stream, payload, requestId) || payload;
+    }
+
+    let message = this.buildMultiplexedMessage(stream, payload);
+    if (this.options.preprocessMessage != null) {
+      message = this.options.preprocessMessage(message) || message;
+    }
+
+    this.send(message);
+  }
+
   public request(stream: string, payload: object, requestId: string=UUID.generate()): Promise<any> {
     return new Promise((resolve, reject) => {
       const selector = this.buildRequestResponseSelector(stream, requestId);
@@ -283,20 +299,7 @@ class DCRFClient implements IStreamingAPI {
           reject(response);
         }
       });
-
-      payload = Object.assign({}, payload, {request_id: requestId});
-      if (this.options.preprocessPayload != null) {
-        // Note: this and the preprocessMessage handler below presume an object will be returned.
-        //       If you really want to return a 0, you're kinda SOL -- wrap it in an object :P
-        payload = this.options.preprocessPayload(stream, payload, requestId) || payload;
-      }
-
-      let message = this.buildMultiplexedMessage(stream, payload);
-      if (this.options.preprocessMessage != null) {
-        message = this.options.preprocessMessage(message) || message;
-      }
-
-      this.send(message);
+      this.sendRequest(payload, requestId, stream);
     });
   }
 
@@ -314,6 +317,8 @@ class DCRFClient implements IStreamingAPI {
         callback(response, null);
       }
     });
+
+    this.sendRequest(payload, requestId, stream);
 
     return () => {
       this.dispatcher.cancel(listenerId);
