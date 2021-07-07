@@ -306,7 +306,7 @@ class DCRFClient implements IStreamingAPI {
   public requestMultiple(stream: string, payload: object, callback: RequestMultipleHandler, requestId: string = UUID.generate()): RequestMultipleCancel {
     const selector = this.buildRequestResponseSelector(stream, requestId);
 
-    const listenerId = this.dispatcher.listen(selector, (data: typeof selector & { payload: { response_status: number, data: any } }) => {
+    let listenerId: number | null = this.dispatcher.listen(selector, (data: typeof selector & { payload: { response_status: number, data: any } }) => {
       const {payload: response} = data;
       const responseStatus = response.response_status;
 
@@ -314,6 +314,10 @@ class DCRFClient implements IStreamingAPI {
       if (Math.floor(responseStatus / 100) === 2) {
         callback(null, response.data);
       } else {
+        if (listenerId) {
+          this.dispatcher.cancel(listenerId);
+          listenerId = null;
+        }
         callback(response, null);
       }
     });
@@ -321,7 +325,10 @@ class DCRFClient implements IStreamingAPI {
     this.sendRequest(payload, requestId, stream);
 
     return () => {
-      this.dispatcher.cancel(listenerId);
+      if (listenerId) {
+        this.dispatcher.cancel(listenerId);
+        listenerId = null;
+      }
     };
   }
 

@@ -243,8 +243,116 @@ describe('DCRFClient', function() {
     });
   });
 
+  describe('requestMultiple', function() {
+    it('sends request and listen for responses until cancel', function () {
+      const responses: any[] = [];
+      const cancel = api.requestMultiple('test', {'key': 'unique'}, (error, response) => {
+        responses.push(response);
+      });
 
-  describe('subscribe', function() {
+      expect(transport.send).to.have.been.calledOnce;
+      const msg = transport.send.getCall(0).args[0];
+      const stream = msg.stream;
+      const requestId = msg.payload.request_id;
+
+      transport.emit('message', {
+        data: {
+          stream,
+          payload: {
+            request_id: requestId,
+            response_status: 200,
+            data: {response: 'unique'}
+          }
+        }
+      });
+
+      transport.emit('message', {
+        data: {
+          stream,
+          payload: {
+            request_id: requestId,
+            response_status: 200,
+            data: {response: 'unique2'}
+          }
+        }
+      });
+
+      cancel();
+
+      transport.emit('message', {
+        data: {
+          stream,
+          payload: {
+            request_id: requestId,
+            response_status: 200,
+            data: {response: 'unique3'}
+          }
+        }
+      });
+
+      expect(responses).to.deep.equal([{'response': 'unique'}, {'response': 'unique2'}]);
+    });
+
+    it('cancels when receiving an error.', function () {
+      const responses: any[] = [];
+      const errors: any[] = [];
+      const cancel = api.requestMultiple('test', {'key': 'unique'}, (error, response) => {
+        if (error) {
+          errors.push(error);
+        } else {
+          responses.push(response);
+        }
+      });
+
+      expect(transport.send).to.have.been.calledOnce;
+      const msg = transport.send.getCall(0).args[0];
+      const stream = msg.stream;
+      const requestId = msg.payload.request_id;
+
+      transport.emit('message', {
+        data: {
+          stream,
+          payload: {
+            request_id: requestId,
+            response_status: 200,
+            data: {response: 'unique'}
+          }
+        }
+      });
+
+      transport.emit('message', {
+        data: {
+          stream,
+          payload: {
+            request_id: requestId,
+            response_status: 400,
+            data: {response: 'unique2'}
+          }
+        }
+      });
+
+      transport.emit('message', {
+        data: {
+          stream,
+          payload: {
+            request_id: requestId,
+            response_status: 200,
+            data: {response: 'unique3'}
+          }
+        }
+      });
+
+      expect(responses).to.deep.equal([{'response': 'unique'}]);
+      expect(errors).to.deep.equal([{
+        request_id: requestId,
+        response_status: 400,
+        data: {response: 'unique2'}
+      }]);
+      expect(cancel).to.not.throw();
+    });
+  });
+
+    describe('subscribe', function() {
     it('invokes callback on every update', function() {
       const id = 1337;
       const requestId = 'fake-request-id';
