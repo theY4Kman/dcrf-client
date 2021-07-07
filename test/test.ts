@@ -352,7 +352,7 @@ describe('DCRFClient', function() {
     });
   });
 
-    describe('subscribe', function() {
+  describe('subscribe', function() {
     it('invokes callback on every update', function() {
       const id = 1337;
       const requestId = 'fake-request-id';
