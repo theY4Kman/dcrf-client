@@ -44,14 +44,18 @@ interface ISubscriptionDescriptor<S, P extends S> {
  */
 export
 class StreamingRequestPromise<T> extends Promise<T> {
-  protected dispatcher: IDispatcher;
-  protected listenerId: number | null;
+  protected _dispatcher: IDispatcher;
+  protected _listenerId: number | null;
 
   constructor(executor: (resolve: (value?: (PromiseLike<T> | T)) => void, reject: (reason?: any) => void) => void,
               dispatcher: IDispatcher, listenerId: number) {
     super(executor);
-    this.dispatcher = dispatcher;
-    this.listenerId = listenerId;
+    this._dispatcher = dispatcher;
+    this._listenerId = listenerId;
+  }
+
+  public get listenerId() {
+    return this._listenerId;
   }
 
   /**
@@ -59,9 +63,9 @@ class StreamingRequestPromise<T> extends Promise<T> {
    * @return true if the subscription was active, false if it was already unsubscribed
    */
   public async cancel(): Promise<boolean> {
-    if (this.listenerId !== null) {
-      const returnValue = this.dispatcher.cancel(this.listenerId);
-      this.listenerId = null;
+    if (this._listenerId !== null) {
+      const returnValue = this._dispatcher.cancel(this._listenerId);
+      this._listenerId = null;
       return returnValue;
     }
     return false;
@@ -341,6 +345,11 @@ class DCRFClient implements IStreamingAPI {
     let listenerId: number | null = this.dispatcher.listen(selector, (data: typeof selector & { payload: { response_status: number, data: any } }) => {
       const {payload: response} = data;
       const responseStatus = response.response_status;
+
+      if (!cancelable.listenerId) {
+        // we promise not to call callback after cancel.
+        return;
+      }
 
       // 2xx is success
       if (Math.floor(responseStatus / 100) === 2) {
