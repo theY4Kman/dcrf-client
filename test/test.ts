@@ -183,9 +183,7 @@ describe('DCRFClient', function() {
       });
 
       expect(transport.send).to.have.been.calledOnce;
-      const msg = transport.send.getCall(0).args[0];
-      const stream = msg.stream;
-      const requestId = msg.payload.request_id;
+      const [{stream, payload: {request_id: requestId}}] = transport.send.firstCall.args;
 
       transport.emit('message', {
         data: {
@@ -243,17 +241,15 @@ describe('DCRFClient', function() {
     });
   });
 
-  describe('requestMultiple', function() {
-    it('sends request and listen for responses until cancel', function () {
+  describe('streamingRequest', function() {
+    it('sends request and listen for responses until cancel', async function () {
       const responses: any[] = [];
-      const cancel = api.requestMultiple('test', {'key': 'unique'}, (error, response) => {
+      const cancel = api.streamingRequest('test', {'key': 'unique'}, (error, response) => {
         responses.push(response);
       });
 
       expect(transport.send).to.have.been.calledOnce;
-      const msg = transport.send.getCall(0).args[0];
-      const stream = msg.stream;
-      const requestId = msg.payload.request_id;
+      const [{stream, payload: {request_id: requestId}}] = transport.send.firstCall.args;
 
       transport.emit('message', {
         data: {
@@ -277,7 +273,7 @@ describe('DCRFClient', function() {
         }
       });
 
-      cancel();
+      expect(await cancel()).to.be.true;
 
       transport.emit('message', {
         data: {
@@ -291,12 +287,13 @@ describe('DCRFClient', function() {
       });
 
       expect(responses).to.deep.equal([{'response': 'unique'}, {'response': 'unique2'}]);
+      expect(await cancel()).to.be.false;
     });
 
-    it('cancels when receiving an error.', function () {
+    it('cancels when receiving an error.', async function () {
       const responses: any[] = [];
       const errors: any[] = [];
-      const cancel = api.requestMultiple('test', {'key': 'unique'}, (error, response) => {
+      const cancel = api.streamingRequest('test', {'key': 'unique'}, (error, response) => {
         if (error) {
           errors.push(error);
         } else {
@@ -305,9 +302,7 @@ describe('DCRFClient', function() {
       });
 
       expect(transport.send).to.have.been.calledOnce;
-      const msg = transport.send.getCall(0).args[0];
-      const stream = msg.stream;
-      const requestId = msg.payload.request_id;
+      const [{stream, payload: {request_id: requestId}}] = transport.send.firstCall.args;
 
       transport.emit('message', {
         data: {
@@ -348,7 +343,7 @@ describe('DCRFClient', function() {
         response_status: 400,
         data: {response: 'unique2'}
       }]);
-      expect(cancel).to.not.throw();
+      expect(await cancel()).to.be.false;
     });
   });
 

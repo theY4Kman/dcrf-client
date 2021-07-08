@@ -12,10 +12,11 @@ export
 type SubscriptionHandler = (payload: {[prop: string]: any}, action: string) => any;
 
 export
-type RequestMultipleHandler = (error: {response_status: number, data: any} | null, payload: {[prop: string]: any} | null) => any;
+type StreamingRequestHandler = (error: {response_status: number, data: any} | null, payload: {[prop: string]: any} | null) => any;
 
 export
-type RequestMultipleCancel = () => void;
+type StreamingRequestCanceler = () => Promise<boolean>;
+
 
 /**
  * Calls all handlers whose selectors match an incoming payload.
@@ -412,7 +413,17 @@ interface IStreamingAPI {
    */
   request(stream: string, payload: object, requestId?: string): Promise<object>;
 
-  requestMultiple(stream: string, payload: object, callback:RequestMultipleHandler, requestId?: string): RequestMultipleCancel;
+  /**
+   * Perform an asynchronous transaction where the result can be broken into multiple responses
+   *
+   * @param stream Name of object's type stream
+   * @param payload Data to send as payload
+   * @param callback Function to call with payload on new responses
+   * @param requestId Value to send as request_id to the server. If not specified,
+   *    one will be generated.
+   * @return StreamingRequestCanceler function to call when deciding there will be no more responses.
+   */
+  streamingRequest(stream: string, payload: object, callback: StreamingRequestHandler, requestId?: string): StreamingRequestCanceler;
 }
 
 
