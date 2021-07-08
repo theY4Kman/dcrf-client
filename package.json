@@ -51,6 +51,7 @@
     "chai": "^4.2.0",
     "chai-subset": "^1.6.0",
     "deasync": "^0.1.14",
+    "flush-promises": "^1.0.2",
     "mocha": "^8.2.1",
     "sinon": "^7.3.1",
     "sinon-chai": "^3.3.0",
@@ -64,8 +65,8 @@
     "autobind-decorator": "^2.4.0",
     "lodash.ismatch": "^4.4.0",
     "lodash.pull": "^4.1.0",
-    "reconnecting-websocket": "^4.4.0",
     "lodash.uniqby": "^4.7.0",
+    "reconnecting-websocket": "^4.4.0",
     "winston": "^3.3.3"
   }
 }

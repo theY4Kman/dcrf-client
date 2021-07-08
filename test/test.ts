@@ -4,6 +4,7 @@ import chai, {expect} from 'chai';
 import sinon from 'sinon';
 import sinonChai from 'sinon-chai';
 import {DCRFClient} from '../src';
+import flushPromises from "flush-promises";
 chai.use(sinonChai);
 
 import FifoDispatcher from '../src/dispatchers/fifo';
@@ -183,9 +184,7 @@ describe('DCRFClient', function() {
       });
 
       expect(transport.send).to.have.been.calledOnce;
-      const msg = transport.send.getCall(0).args[0];
-      const stream = msg.stream;
-      const requestId = msg.payload.request_id;
+      const [{stream, payload: {request_id: requestId}}] = transport.send.firstCall.args;
 
       transport.emit('message', {
         data: {
@@ -243,6 +242,117 @@ describe('DCRFClient', function() {
     });
   });
 
+  describe('streamingRequest', function() {
+    it('sends request and listen for responses until cancel', async function () {
+      const responses: any[] = [];
+      const cancelable = api.streamingRequest('test', {'key': 'unique'}, (error, response) => {
+        responses.push(response);
+      });
+
+      await cancelable;
+
+      expect(transport.send).to.have.been.calledOnce;
+      const [{stream, payload: {request_id: requestId}}] = transport.send.firstCall.args;
+
+      transport.emit('message', {
+        data: {
+          stream,
+          payload: {
+            request_id: requestId,
+            response_status: 200,
+            data: {response: 'unique'}
+          }
+        }
+      });
+
+      transport.emit('message', {
+        data: {
+          stream,
+          payload: {
+            request_id: requestId,
+            response_status: 200,
+            data: {response: 'unique2'}
+          }
+        }
+      });
+
+      expect(await cancelable.cancel()).to.be.true;
+
+      transport.emit('message', {
+        data: {
+          stream,
+          payload: {
+            request_id: requestId,
+            response_status: 200,
+            data: {response: 'unique3'}
+          }
+        }
+      });
+
+      expect(responses).to.deep.equal([{'response': 'unique'}, {'response': 'unique2'}]);
+      expect(await cancelable.cancel()).to.be.false;
+    });
+
+    it('cancels when receiving an error.', async function () {
+      const responses: any[] = [];
+      const errors: any[] = [];
+      const cancelable = api.streamingRequest('test', {'key': 'unique'}, (error, response) => {
+        if (error) {
+          errors.push(error);
+        } else {
+          responses.push(response);
+        }
+      });
+
+      await cancelable;
+
+      expect(transport.send).to.have.been.calledOnce;
+      const [{stream, payload: {request_id: requestId}}] = transport.send.firstCall.args;
+
+      transport.emit('message', {
+        data: {
+          stream,
+          payload: {
+            request_id: requestId,
+            response_status: 200,
+            data: {response: 'unique'}
+          }
+        }
+      });
+
+      transport.emit('message', {
+        data: {
+          stream,
+          payload: {
+            request_id: requestId,
+            response_status: 400,
+            data: {response: 'unique2'}
+          }
+        }
+      });
+
+      transport.emit('message', {
+        data: {
+          stream,
+          payload: {
+            request_id: requestId,
+            response_status: 200,
+            data: {response: 'unique3'}
+          }
+        }
+      });
+
+      await flushPromises();
+
+      expect(responses).to.deep.equal([{'response': 'unique'}]);
+      expect(errors).to.deep.equal([{
+        request_id: requestId,
+        response_status: 400,
+        data: {response: 'unique2'}
+      }]);
+      expect(await cancelable.cancel()).to.be.false;
+    });
+  });
 
   describe('subscribe', function() {
     it('invokes callback on every update', function() {
