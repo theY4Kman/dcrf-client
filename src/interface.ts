@@ -14,9 +14,6 @@ type SubscriptionHandler = (payload: {[prop: string]: any}, action: string) => a
 export
 type StreamingRequestHandler = (error: {response_status: number, data: any} | null, payload: {[prop: string]: any} | null) => any;
 
-export
-type StreamingRequestCanceler = () => Promise<boolean>;
-
 
 /**
  * Calls all handlers whose selectors match an incoming payload.
@@ -423,7 +420,7 @@ interface IStreamingAPI {
    *    one will be generated.
    * @return StreamingRequestCanceler function to call when deciding there will be no more responses.
    */
-  streamingRequest(stream: string, payload: object, callback: StreamingRequestHandler, requestId?: string): StreamingRequestCanceler;
+  streamingRequest(stream: string, payload: object, callback: StreamingRequestHandler, requestId?: string): CancelablePromise<void>;
 }
 
 

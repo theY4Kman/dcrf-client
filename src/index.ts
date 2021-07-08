@@ -13,7 +13,6 @@ import {
   ISerializer,
   IStreamingAPI,
   ITransport,
-  StreamingRequestCanceler,
   StreamingRequestHandler,
   SubscribeOptions,
   SubscriptionHandler,
@@ -35,6 +34,38 @@ interface ISubscriptionDescriptor<S, P extends S> {
   handler: DispatchListener<P>,
   subscribeMessage: object,
   unsubscribeMessage: object,
+}
+
+/**
+ * Promise representing the listening for responses during a streaming request, and offering an
+ * cancel() method to stop listening for additional responses.
+ *
+ * This is returned from DCRFClient.streamingRequest.
+ */
+export
+class StreamingRequestPromise<T> extends Promise<T> {
+  protected dispatcher: IDispatcher;
+  protected listenerId: number | null;
+
+  constructor(executor: (resolve: (value?: (PromiseLike<T> | T)) => void, reject: (reason?: any) => void) => void,
+              dispatcher: IDispatcher, listenerId: number) {
+    super(executor);
+    this.dispatcher = dispatcher;
+    this.listenerId = listenerId;
+  }
+
+  /**
+   * Stop listening for new events on this subscription
+   * @return true if the subscription was active, false if it was already unsubscribed
+   */
+  public async cancel(): Promise<boolean> {
+    if (this.listenerId !== null) {
+      const returnValue = this.dispatcher.cancel(this.listenerId);
+      this.listenerId = null;
+      return returnValue;
+    }
+    return false;
+  }
 }
 
 export
@@ -303,9 +334,10 @@ class DCRFClient implements IStreamingAPI {
     });
   }
 
-  public streamingRequest(stream: string, payload: object, callback: StreamingRequestHandler, requestId: string = UUID.generate()): StreamingRequestCanceler {
+  public streamingRequest(stream: string, payload: object, callback: StreamingRequestHandler, requestId: string = UUID.generate()): StreamingRequestPromise<void> {
     const selector = this.buildRequestResponseSelector(stream, requestId);
 
+    let cancelable: StreamingRequestPromise<void>;
     let listenerId: number | null = this.dispatcher.listen(selector, (data: typeof selector & { payload: { response_status: number, data: any } }) => {
       const {payload: response} = data;
       const responseStatus = response.response_status;
@@ -314,24 +346,23 @@ class DCRFClient implements IStreamingAPI {
       if (Math.floor(responseStatus / 100) === 2) {
         callback(null, response.data);
       } else {
-        if (listenerId) {
-          this.dispatcher.cancel(listenerId);
-          listenerId = null;
-        }
-        callback(response, null);
+        cancelable.cancel().finally(() => {
+          callback(response, null);
+        })
+
       }
     });
 
-    this.sendRequest(payload, requestId, stream);
-
-    return async () => {
-      if (listenerId !== null) {
-        const returnValue = this.dispatcher.cancel(listenerId);
-        listenerId = null;
-        return returnValue;
+    cancelable = new StreamingRequestPromise((resolve, reject) => {
+      try {
+        this.sendRequest(payload, requestId, stream);
+        resolve();
+      } catch (e) {
+        reject(e);
       }
-      return false;
-    };
+    }, this.dispatcher, listenerId);
+
+    return cancelable;
   }
 
   public send(object: object) {
