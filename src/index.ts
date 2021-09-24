@@ -13,6 +13,7 @@ import {
   ISerializer,
   IStreamingAPI,
   ITransport,
+  StreamingRequestHandler,
   SubscribeOptions,
   SubscriptionHandler,
 } from './interface';
@@ -33,6 +34,42 @@ interface ISubscriptionDescriptor<S, P extends S> {
   handler: DispatchListener<P>,
   subscribeMessage: object,
   unsubscribeMessage: object,
+}
+
+/**
+ * Promise representing the listening for responses during a streaming request, and offering an
+ * cancel() method to stop listening for additional responses.
+ *
+ * This is returned from DCRFClient.streamingRequest.
+ */
+export
+class StreamingRequestPromise<T> extends Promise<T> {
+  protected _dispatcher: IDispatcher;
+  protected _listenerId: number | null;
+
+  constructor(executor: (resolve: (value?: (PromiseLike<T> | T)) => void, reject: (reason?: any) => void) => void,
+              dispatcher: IDispatcher, listenerId: number) {
+    super(executor);
+    this._dispatcher = dispatcher;
+    this._listenerId = listenerId;
+  }
+
+  public get listenerId() {
+    return this._listenerId;
+  }
+
+  /**
+   * Stop listening for new events on this subscription
+   * @return true if the subscription was active, false if it was already unsubscribed
+   */
+  public async cancel(): Promise<boolean> {
+    if (this._listenerId !== null) {
+      const returnValue = this._dispatcher.cancel(this._listenerId);
+      this._listenerId = null;
+      return returnValue;
+    }
+    return false;
+  }
 }
 
 export
@@ -266,6 +303,22 @@ class DCRFClient implements IStreamingAPI {
     }
   }
 
+  private sendRequest(payload: object, requestId: string, stream: string) {
+    payload = Object.assign({}, payload, {request_id: requestId});
+    if (this.options.preprocessPayload != null) {
+      // Note: this and the preprocessMessage handler below presume an object will be returned.
+      //       If you really want to return a 0, you're kinda SOL -- wrap it in an object :P
+      payload = this.options.preprocessPayload(stream, payload, requestId) || payload;
+    }
+
+    let message = this.buildMultiplexedMessage(stream, payload);
+    if (this.options.preprocessMessage != null) {
+      message = this.options.preprocessMessage(message) || message;
+    }
+
+    this.send(message);
+  }
+
   public request(stream: string, payload: object, requestId: string=UUID.generate()): Promise<any> {
     return new Promise((resolve, reject) => {
       const selector = this.buildRequestResponseSelector(stream, requestId);
@@ -281,21 +334,44 @@ class DCRFClient implements IStreamingAPI {
           reject(response);
         }
       });
-
-      payload = Object.assign({}, payload, {request_id: requestId});
-      if (this.options.preprocessPayload != null) {
-        // Note: this and the preprocessMessage handler below presume an object will be returned.
-        //       If you really want to return a 0, you're kinda SOL -- wrap it in an object :P
-        payload = this.options.preprocessPayload(stream, payload, requestId) || payload;
-      }
-
-      let message = this.buildMultiplexedMessage(stream, payload);
-      if (this.options.preprocessMessage != null) {
-        message = this.options.preprocessMessage(message) || message;
-      }
-
-      this.send(message);
+      this.sendRequest(payload, requestId, stream);
     });
+  }
+
+  public streamingRequest(stream: string, payload: object, callback: StreamingRequestHandler, requestId: string = UUID.generate()): StreamingRequestPromise<void> {
+    const selector = this.buildRequestResponseSelector(stream, requestId);
+
+    let cancelable: StreamingRequestPromise<void>;
+    let listenerId: number | null = this.dispatcher.listen(selector, (data: typeof selector & { payload: { response_status: number, data: any } }) => {
+      const {payload: response} = data;
+      const responseStatus = response.response_status;
+
+      if (!cancelable.listenerId) {
+        // we promise not to call callback after cancel.
+        return;
+      }
+
+      // 2xx is success
+      if (Math.floor(responseStatus / 100) === 2) {
+        callback(null, response.data);
+      } else {
+        cancelable.cancel().finally(() => {
+          callback(response, null);
+        })
+
+      }
+    });
+
+    cancelable = new StreamingRequestPromise((resolve, reject) => {
+      try {
+        this.sendRequest(payload, requestId, stream);
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
+    }, this.dispatcher, listenerId);
+
+    return cancelable;
   }
 
   public send(object: object) {

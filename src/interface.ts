@@ -11,6 +11,9 @@ type DispatchListener<T> = (response: T) => any;
 export
 type SubscriptionHandler = (payload: {[prop: string]: any}, action: string) => any;
 
+export
+type StreamingRequestHandler = (error: {response_status: number, data: any} | null, payload: {[prop: string]: any} | null) => any;
+
 
 /**
  * Calls all handlers whose selectors match an incoming payload.
@@ -406,6 +409,18 @@ interface IStreamingAPI {
    *    On failure, the promise will be rejected with the entire API response.
    */
   request(stream: string, payload: object, requestId?: string): Promise<object>;
+
+  /**
+   * Perform an asynchronous transaction where the result can be broken into multiple responses
+   *
+   * @param stream Name of object's type stream
+   * @param payload Data to send as payload
+   * @param callback Function to call with payload on new responses
+   * @param requestId Value to send as request_id to the server. If not specified,
+   *    one will be generated.
+   * @return StreamingRequestCanceler function to call when deciding there will be no more responses.
+   */
+  streamingRequest(stream: string, payload: object, callback: StreamingRequestHandler, requestId?: string): CancelablePromise<void>;
 }
 
 
