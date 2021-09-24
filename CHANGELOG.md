@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## [Unreleased]
+### Added
+ - Add support for streaming requests ([#31](https://github.com/theY4Kman/dcrf-client/pull/31), thanks [@jhillacre](https://github.com/jhillacre)!)
 
 
 ## 1.0.0 — 2021-06-05
