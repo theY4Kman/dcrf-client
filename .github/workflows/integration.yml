@@ -49,6 +49,6 @@ jobs:
       with:
         redis-version: '6.x'
         auto-start: false
-    - run: npm ci
-    - run: npm run test:integration
+    - name: Run Integration Tests
+      run: npm run test:integration
 
