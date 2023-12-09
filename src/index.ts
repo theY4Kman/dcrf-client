@@ -84,7 +84,7 @@ export class DCRFClient implements IStreamingAPI {
   public readonly options: IDCRFOptions;
   public readonly pkField: string;
   public readonly ensurePkFieldInDeleteEvents: boolean;
-  private readonly logger: Logger;
+  public readonly logger: Logger;
 
   public readonly subscriptions: {
     [listenerId: number]: ISubscriptionDescriptor<any, any>;

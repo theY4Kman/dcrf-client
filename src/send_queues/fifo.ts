@@ -19,7 +19,7 @@ export class FifoQueue extends BaseSendQueue implements ISendQueue {
     sendNow?: (bytes: string) => number;
     canSend?: () => boolean;
     logger?: Logger;
-  }) {
+  } = {}) {
     super(sendNow, canSend);
     this.queue = [];
     this.logger = logger || defaultLogger;
