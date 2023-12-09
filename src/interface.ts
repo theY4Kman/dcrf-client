@@ -1,4 +1,5 @@
 import { Options as ReconnectingWebsocketOptions } from 'reconnecting-websocket';
+import { Logger } from 'winston';
 
 export
 interface IMessageEvent {
@@ -550,6 +551,7 @@ interface IDCRFOptions {
   transport?: ITransport,
   queue?: ISendQueue,
   serializer?: ISerializer,
+  logger?: Logger,
 
   preprocessPayload?: PayloadPreprocessor,
   preprocessMessage?: MessagePreprocessor,

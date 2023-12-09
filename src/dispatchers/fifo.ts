@@ -1,45 +1,51 @@
-import isMatch from 'lodash.ismatch';
-import pull from 'lodash.pull';
+import isMatch from "lodash.ismatch";
+import pull from "lodash.pull";
 
-import { getLogger } from '../logging';
-import {DispatchListener, IDispatcher} from '../interface';
+import { getLogger } from "../logging";
+import { DispatchListener, IDispatcher } from "../interface";
+import { Logger } from "winston";
 
-const log = getLogger('dcrf.dispatchers.fifo');
-
+const defaultLogger = getLogger("dcrf.dispatchers.fifo");
 
 type Listener<S, P extends S> = {
-  selector: S,
-  handler: DispatchListener<P>,
+  selector: S;
+  handler: DispatchListener<P>;
 };
-
 
 /**
  * Invokes listeners on a first-registered, first-called basis
  */
-export
-class FifoDispatcher implements IDispatcher {
+export class FifoDispatcher implements IDispatcher {
   private static listenerCounter: number = 0;
 
   protected listeners: {
-    [listenerId:number]: Listener<any, any>,
+    [listenerId: number]: Listener<any, any>;
   };
   protected listenersOrder: number[];
+  private readonly logger: Logger;
 
-  constructor() {
+  constructor(logger?: Logger) {
     this.listeners = {};
     this.listenersOrder = [];
+    this.logger = logger || defaultLogger;
   }
 
-  public listen<S, P extends S>(selector: S, handler: DispatchListener<P>): number {
+  public listen<S, P extends S>(
+    selector: S,
+    handler: DispatchListener<P>
+  ): number {
     const listenerId = ++FifoDispatcher.listenerCounter;
 
-    this.listeners[listenerId] = {selector, handler};
+    this.listeners[listenerId] = { selector, handler };
     this.listenersOrder.push(listenerId);
 
     return listenerId;
   }
 
-  public once<S, P extends S>(selector: S, handler: DispatchListener<P>): number {
+  public once<S, P extends S>(
+    selector: S,
+    handler: DispatchListener<P>
+  ): number {
     const listenerId = this.listen(selector, (payload: P) => {
       this.cancel(listenerId);
       handler(payload);
@@ -54,22 +60,32 @@ class FifoDispatcher implements IDispatcher {
 
     delete this.listeners[listenerId];
     pull(this.listenersOrder, listenerId);
-    return true
+    return true;
   }
 
   public dispatch(payload: object): number {
-    const listeners = this.listenersOrder.map(listenerId => this.listeners[listenerId]);
+    const listeners = this.listenersOrder.map(
+      (listenerId) => this.listeners[listenerId]
+    );
 
     let matches = 0;
-    listeners.forEach(({selector, handler}) => {
+    listeners.forEach(({ selector, handler }) => {
       if (isMatch(payload, selector)) {
-        log.debug('Matched selector %o with payload %o. Invoking handler %s',
-                  selector, payload, handler.name);
+        this.logger.debug(
+          "Matched selector %o with payload %o. Invoking handler %s",
+          selector,
+          payload,
+          handler.name
+        );
         matches++;
         handler(payload);
       } else {
-        log.silly('Unable to match selector %o with payload %o. Not invoking handler %s',
-                  selector, payload, handler.name);
+        this.logger.silly(
+          "Unable to match selector %o with payload %o. Not invoking handler %s",
+          selector,
+          payload,
+          handler.name
+        );
       }
     });
 

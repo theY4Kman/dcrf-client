@@ -86,7 +86,7 @@ class PytestReporter extends Mocha.reporters.Base {
       let bytesWritten: number;
       try {
         bytesWritten = fs.writeSync(STDOUT_FD, buffer);
-      } catch (e) {
+      } catch (e: any) {
         if (e.code === 'EAGAIN') {
           continue;
         } else {
