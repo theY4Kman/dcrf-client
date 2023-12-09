@@ -592,7 +592,9 @@ describe("DCRFClient", function () {
       const customLogger = createLogger({
         transports: [
           new transports.Console(),
-          new transports.File({ filename: "test.log" }),
+          new transports.Stream({
+            stream: process.stdout,
+          })
         ],
       });
 
