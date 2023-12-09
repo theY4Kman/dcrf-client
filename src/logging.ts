@@ -14,7 +14,7 @@ const rootLogger = createLogger({
   transports: [
     new transports.Console(),
   ],
-});
+}); 
 
 
 export

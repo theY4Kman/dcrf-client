@@ -1,25 +1,34 @@
-import autobind from 'autobind-decorator';
+import autobind from "autobind-decorator";
 
-import { getLogger } from '../logging';
-import { ISendQueue } from '../interface';
-import BaseSendQueue from './base';
+import { getLogger } from "../logging";
+import { ISendQueue } from "../interface";
+import BaseSendQueue from "./base";
+import { Logger } from "winston";
 
-const log = getLogger('dcrf.send_queues.fifo');
+const defaultLogger = getLogger("dcrf.send_queues.fifo");
 
-
-export
-class FifoQueue extends BaseSendQueue implements ISendQueue {
+export class FifoQueue extends BaseSendQueue implements ISendQueue {
   public readonly queue: string[];
+  private readonly logger: Logger;
 
-  constructor(sendNow?: (bytes: string) => number, canSend?: () => boolean) {
+  constructor({
+    sendNow,
+    canSend,
+    logger,
+  }: {
+    sendNow?: (bytes: string) => number;
+    canSend?: () => boolean;
+    logger?: Logger;
+  } = {}) {
     super(sendNow, canSend);
     this.queue = [];
+    this.logger = logger || defaultLogger;
   }
 
   @autobind
   public send(bytes: string): number {
     if (this.canSend()) {
-      log.debug(`Sending bytes over the wire: ${bytes}`);
+      this.logger.debug(`Sending bytes over the wire: ${bytes}`);
       return this.sendNow(bytes);
     } else {
       this.queueMessage(bytes);
@@ -28,7 +37,7 @@ class FifoQueue extends BaseSendQueue implements ISendQueue {
   }
 
   public queueMessage(bytes: string): boolean {
-    log.debug('Queueing message to send later: %o', bytes);
+    this.logger.debug("Queueing message to send later: %o", bytes);
     this.queue.push(bytes);
     return true;
   }
@@ -38,7 +47,7 @@ class FifoQueue extends BaseSendQueue implements ISendQueue {
     let numProcessed = 0;
 
     if (this.queue.length) {
-      log.debug(`Sending ${this.queue.length} queued messages.`);
+      this.logger.debug(`Sending ${this.queue.length} queued messages.`);
 
       while (this.queue.length) {
         const object = this.queue.shift();

@@ -8,7 +8,7 @@ export
 class SubscriptionPromise<T> extends Promise<T> {
   protected unsubscribe: () => Promise<boolean>;
 
-  constructor(executor: (resolve: (value?: (PromiseLike<T> | T)) => void, reject: (reason?: any) => void) => void,
+  constructor(executor: (resolve: (value: (PromiseLike<T> | T)) => void, reject: (reason?: any) => void) => void,
                 unsubscribe: () => Promise<boolean>) {
     super(executor);
     this.unsubscribe = unsubscribe;

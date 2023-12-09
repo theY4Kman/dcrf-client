@@ -1,144 +1,153 @@
-import EventEmitter from 'events';
+import EventEmitter from "events";
 
-import chai, {expect} from 'chai';
-import sinon from 'sinon';
-import sinonChai from 'sinon-chai';
-import {DCRFClient} from '../src';
+import chai, { expect } from "chai";
+import sinon from "sinon";
+import sinonChai from "sinon-chai";
+import { DCRFClient } from "../src";
 import flushPromises from "flush-promises";
+
+import { createLogger, format, transports } from "winston";
+
 chai.use(sinonChai);
 
-import FifoDispatcher from '../src/dispatchers/fifo';
+import FifoDispatcher from "../src/dispatchers/fifo";
 import {
+  IDCRFOptions,
   IDispatcher,
   ISendQueue,
   ISerializer,
   ITransport,
-  MessagePreprocessor, PayloadPreprocessor
-} from '../src/interface';
-import FifoQueue from '../src/send_queues/fifo';
+  MessagePreprocessor,
+  PayloadPreprocessor,
+} from "../src/interface";
+import FifoQueue from "../src/send_queues/fifo";
 
-
-describe('FifoDispatcher', function () {
-  describe('dispatch', function () {
-    it('should call handler when selector is matched', function() {
+describe("FifoDispatcher", function () {
+  describe("dispatch", function () {
+    it("should call handler when selector is matched", function () {
       const dispatcher = new FifoDispatcher();
       const spy = sinon.spy();
-      dispatcher.listen({test: 'unique'}, spy);
-      dispatcher.dispatch({test: 'unique'});
+      dispatcher.listen({ test: "unique" }, spy);
+      dispatcher.dispatch({ test: "unique" });
       expect(spy).to.have.been.called;
     });
 
-    it('should not call handler when selector is not matched', function() {
+    it("should not call handler when selector is not matched", function () {
       const dispatcher = new FifoDispatcher();
       const spy = sinon.spy();
-      dispatcher.listen({test: 'unique'}, spy);
-      dispatcher.dispatch({test: 'clearly not unique'});
+      dispatcher.listen({ test: "unique" }, spy);
+      dispatcher.dispatch({ test: "clearly not unique" });
       expect(spy).not.to.have.been.called;
     });
 
-    it('should match recursively', function() {
+    it("should match recursively", function () {
       const dispatcher = new FifoDispatcher();
       const spy = sinon.spy();
-      dispatcher.listen({down: {the: {rabbit: 'hole'}}}, spy);
-      dispatcher.dispatch({down: {the: {rabbit: 'hole'}}});
+      dispatcher.listen({ down: { the: { rabbit: "hole" } } }, spy);
+      dispatcher.dispatch({ down: { the: { rabbit: "hole" } } });
       expect(spy).to.have.been.called;
     });
   });
 
-  describe('cancel', function () {
-    it('should stop calling handler', function () {
+  describe("cancel", function () {
+    it("should stop calling handler", function () {
       const dispatcher = new FifoDispatcher();
       const spy = sinon.spy();
-      const listenerId = dispatcher.listen({test: 'unique'}, spy);
-      dispatcher.dispatch({test: 'unique'});
+      const listenerId = dispatcher.listen({ test: "unique" }, spy);
+      dispatcher.dispatch({ test: "unique" });
       expect(spy).to.have.been.calledOnce;
 
       dispatcher.cancel(listenerId);
-      dispatcher.dispatch({test: 'unique'});
+      dispatcher.dispatch({ test: "unique" });
       expect(spy).to.have.been.calledOnce;
     });
   });
 
-  describe('once', function() {
-    it('should call handler when selector is matched only once', function() {
+  describe("once", function () {
+    it("should call handler when selector is matched only once", function () {
       const dispatcher = new FifoDispatcher();
       const spy = sinon.spy();
-      dispatcher.once({test: 'unique'}, spy);
+      dispatcher.once({ test: "unique" }, spy);
 
-      dispatcher.dispatch({test: 'unique'});
+      dispatcher.dispatch({ test: "unique" });
       expect(spy).to.have.been.calledOnce;
 
-      dispatcher.dispatch({test: 'unique'});
+      dispatcher.dispatch({ test: "unique" });
       expect(spy).to.have.been.calledOnce;
     });
   });
 });
 
+describe("FifoQueue", function () {
+  let queue: FifoQueue & { canSend: sinon.SinonStub };
 
-describe('FifoQueue', function() {
-  let queue: FifoQueue & {canSend: sinon.SinonStub};
-
-  beforeEach(function() {
+  beforeEach(function () {
     const sendNow = sinon.stub();
     const canSend = sinon.stub().returns(true);
-    queue = new FifoQueue(sendNow, canSend) as FifoQueue & {canSend: sinon.SinonStub};
+    queue = new FifoQueue({ sendNow, canSend }) as FifoQueue & {
+      canSend: sinon.SinonStub;
+    };
   });
 
-  describe('send', function () {
-    it('should send message immediately if canSend() == true', function () {
-      queue.send('test');
-      expect(queue.sendNow).to.have.been.calledOnce.and.calledWith('test');
+  describe("send", function () {
+    it("should send message immediately if canSend() == true", function () {
+      queue.send("test");
+      expect(queue.sendNow).to.have.been.calledOnce.and.calledWith("test");
     });
 
-    it('should queue message if canSend() == false', function () {
-      sinon.spy(queue, 'queueMessage');
+    it("should queue message if canSend() == false", function () {
+      sinon.spy(queue, "queueMessage");
       queue.canSend.returns(false);
 
-      queue.send('test');
+      queue.send("test");
       expect(queue.sendNow).not.to.have.been.called;
-      expect(queue.queueMessage).to.have.been.calledOnce.and.calledWith('test');
+      expect(queue.queueMessage).to.have.been.calledOnce.and.calledWith("test");
     });
   });
 
-  describe('queueMessage', function() {
-    it('should push message to queue', function() {
-      queue.queueMessage('test');
-      expect(queue.queue).to.eql(['test']);
+  describe("queueMessage", function () {
+    it("should push message to queue", function () {
+      queue.queueMessage("test");
+      expect(queue.queue).to.eql(["test"]);
     });
   });
 
-  describe('processQueue', function() {
-    it('should send all queued messages immediately', function () {
-      queue.queueMessage('test');
-      queue.queueMessage('muffin');
+  describe("processQueue", function () {
+    it("should send all queued messages immediately", function () {
+      queue.queueMessage("test");
+      queue.queueMessage("muffin");
       queue.processQueue();
 
       expect(queue.sendNow)
-        .to.have.been.calledTwice
-        .and.calledWith('test')
-        .and.calledWith('muffin')
+        .to.have.been.calledTwice.and.calledWith("test")
+        .and.calledWith("muffin");
     });
   });
 });
 
-
-describe('DCRFClient', function() {
+describe("DCRFClient", function () {
   let dispatcher: IDispatcher,
-      transport: DummyTransport,
-      queue: ISendQueue,
-      serializer: ISerializer,
-      api: DCRFClient;
+    transport: DummyTransport,
+    queue: ISendQueue,
+    serializer: ISerializer,
+    api: DCRFClient;
 
-  const initClient = (options = {}) => {
-    dispatcher = new FifoDispatcher();
+  const initClient = (options: IDCRFOptions = {}) => {
+    dispatcher = new FifoDispatcher(options?.logger);
     transport = new DummyTransport();
-    queue = new FifoQueue();
+    queue = new FifoQueue({ logger: options?.logger });
     serializer = new DummySerializer();
 
-    const client = new DCRFClient(dispatcher, transport, queue, serializer, options);
+    const client = new DCRFClient(
+      dispatcher,
+      transport,
+      queue,
+      serializer,
+      options
+    );
     client.initialize();
     return client;
-  }
+  };
 
   class DummyTransport extends EventEmitter implements ITransport {
     send = sinon.spy();
@@ -147,9 +156,9 @@ describe('DCRFClient', function() {
     public connect = sinon.spy(() => {
       this.isConnected.returns(true);
       if (this.hasConnected) {
-        this.emit('reconnect');
+        this.emit("reconnect");
       } else {
-        this.emit('connect');
+        this.emit("connect");
         this.hasConnected = true;
       }
     }) as unknown as () => boolean;
@@ -172,69 +181,83 @@ describe('DCRFClient', function() {
     }
   }
 
-  beforeEach(function() {
+  beforeEach(function () {
     api = initClient();
   });
 
-
-  describe('request', function() {
-    it('sends request and listen for response', function() {
-      const promise = api.request('test', {'key': 'unique'}).then(response => {
-        expect(response).to.eql({'response': 'unique'});
-      });
+  describe("request", function () {
+    it("sends request and listen for response", function () {
+      const promise = api
+        .request("test", { key: "unique" })
+        .then((response) => {
+          expect(response).to.eql({ response: "unique" });
+        });
 
       expect(transport.send).to.have.been.calledOnce;
-      const [{stream, payload: {request_id: requestId}}] = transport.send.firstCall.args;
+      const [
+        {
+          stream,
+          payload: { request_id: requestId },
+        },
+      ] = transport.send.firstCall.args;
 
-      transport.emit('message', {
+      transport.emit("message", {
         data: {
           stream,
           payload: {
             request_id: requestId,
             response_status: 200,
-            data: {response: 'unique'}
-          }
-        }
+            data: { response: "unique" },
+          },
+        },
       });
 
       return promise;
     });
 
-    it('allows preprocessPayload to change payload before sending', function() {
-      const preprocessPayload = sinon.spy((stream: string, payload: {[prop: string]: any}, requestId: string) => {
-        payload.unique = 'muffin';
-      }) as unknown as PayloadPreprocessor;
+    it("allows preprocessPayload to change payload before sending", function () {
+      const preprocessPayload = sinon.spy(
+        (
+          stream: string,
+          payload: { [prop: string]: any },
+          requestId: string
+        ) => {
+          payload.unique = "muffin";
+        }
+      ) as unknown as PayloadPreprocessor;
 
-      const api = initClient({preprocessPayload});
+      const api = initClient({ preprocessPayload });
 
-      api.request('test', {});
+      api.request("test", {});
 
       expect(preprocessPayload).to.have.been.calledOnce;
       expect(transport.send).to.have.been.calledOnce;
       const msg = transport.send.getCall(0).args[0];
-      expect(msg.payload).to.have.property('unique', 'muffin');
+      expect(msg.payload).to.have.property("unique", "muffin");
     });
 
-    it('allows preprocessMessage to change message before sending', function() {
-      const preprocessMessage = sinon.spy((message: {[prop: string]: any}) => {
-        message.unique = 'muffin';
-      }) as unknown as MessagePreprocessor;
+    it("allows preprocessMessage to change message before sending", function () {
+      const preprocessMessage = sinon.spy(
+        (message: { [prop: string]: any }) => {
+          message.unique = "muffin";
+        }
+      ) as unknown as MessagePreprocessor;
 
-      const api = initClient({preprocessMessage});
+      const api = initClient({ preprocessMessage });
 
-      api.request('test', {});
+      api.request("test", {});
 
       expect(preprocessMessage).to.have.been.calledOnce;
       expect(transport.send).to.have.been.calledOnce;
       const msg = transport.send.getCall(0).args[0];
-      expect(msg).to.have.property('unique', 'muffin');
+      expect(msg).to.have.property("unique", "muffin");
     });
 
-    it('queues request until connected', function () {
+    it("queues request until connected", function () {
       transport.disconnect();
       transport.hasConnected = false;
 
-      api.request('test', {'key': 'unique'});
+      api.request("test", { key: "unique" });
       expect(transport.send).not.to.have.been.called;
 
       transport.connect();
@@ -242,161 +265,185 @@ describe('DCRFClient', function() {
     });
   });
 
-  describe('streamingRequest', function() {
-    it('sends request and listen for responses until cancel', async function () {
+  describe("streamingRequest", function () {
+    it("sends request and listen for responses until cancel", async function () {
       const responses: any[] = [];
-      const cancelable = api.streamingRequest('test', {'key': 'unique'}, (error, response) => {
-        responses.push(response);
-      });
+      const cancelable = api.streamingRequest(
+        "test",
+        { key: "unique" },
+        (error, response) => {
+          responses.push(response);
+        }
+      );
 
       await cancelable;
 
       expect(transport.send).to.have.been.calledOnce;
-      const [{stream, payload: {request_id: requestId}}] = transport.send.firstCall.args;
+      const [
+        {
+          stream,
+          payload: { request_id: requestId },
+        },
+      ] = transport.send.firstCall.args;
 
-      transport.emit('message', {
+      transport.emit("message", {
         data: {
           stream,
           payload: {
             request_id: requestId,
             response_status: 200,
-            data: {response: 'unique'}
-          }
-        }
+            data: { response: "unique" },
+          },
+        },
       });
 
-      transport.emit('message', {
+      transport.emit("message", {
         data: {
           stream,
           payload: {
             request_id: requestId,
             response_status: 200,
-            data: {response: 'unique2'}
-          }
-        }
+            data: { response: "unique2" },
+          },
+        },
       });
 
       expect(await cancelable.cancel()).to.be.true;
 
-      transport.emit('message', {
+      transport.emit("message", {
         data: {
           stream,
           payload: {
             request_id: requestId,
             response_status: 200,
-            data: {response: 'unique3'}
-          }
-        }
+            data: { response: "unique3" },
+          },
+        },
       });
 
-      expect(responses).to.deep.equal([{'response': 'unique'}, {'response': 'unique2'}]);
+      expect(responses).to.deep.equal([
+        { response: "unique" },
+        { response: "unique2" },
+      ]);
       expect(await cancelable.cancel()).to.be.false;
     });
 
-    it('cancels when receiving an error.', async function () {
+    it("cancels when receiving an error.", async function () {
       const responses: any[] = [];
       const errors: any[] = [];
-      const cancelable = api.streamingRequest('test', {'key': 'unique'}, (error, response) => {
-        if (error) {
-          errors.push(error);
-        } else {
-          responses.push(response);
+      const cancelable = api.streamingRequest(
+        "test",
+        { key: "unique" },
+        (error, response) => {
+          if (error) {
+            errors.push(error);
+          } else {
+            responses.push(response);
+          }
         }
-      });
+      );
 
       await cancelable;
 
       expect(transport.send).to.have.been.calledOnce;
-      const [{stream, payload: {request_id: requestId}}] = transport.send.firstCall.args;
+      const [
+        {
+          stream,
+          payload: { request_id: requestId },
+        },
+      ] = transport.send.firstCall.args;
 
-      transport.emit('message', {
+      transport.emit("message", {
         data: {
           stream,
           payload: {
             request_id: requestId,
             response_status: 200,
-            data: {response: 'unique'}
-          }
-        }
+            data: { response: "unique" },
+          },
+        },
       });
 
-      transport.emit('message', {
+      transport.emit("message", {
         data: {
           stream,
           payload: {
             request_id: requestId,
             response_status: 400,
-            data: {response: 'unique2'}
-          }
-        }
+            data: { response: "unique2" },
+          },
+        },
       });
 
-      transport.emit('message', {
+      transport.emit("message", {
         data: {
           stream,
           payload: {
             request_id: requestId,
             response_status: 200,
-            data: {response: 'unique3'}
-          }
-        }
+            data: { response: "unique3" },
+          },
+        },
       });
 
       await flushPromises();
 
-      expect(responses).to.deep.equal([{'response': 'unique'}]);
-      expect(errors).to.deep.equal([{
-        request_id: requestId,
-        response_status: 400,
-        data: {response: 'unique2'}
-      }]);
+      expect(responses).to.deep.equal([{ response: "unique" }]);
+      expect(errors).to.deep.equal([
+        {
+          request_id: requestId,
+          response_status: 400,
+          data: { response: "unique2" },
+        },
+      ]);
       expect(await cancelable.cancel()).to.be.false;
     });
   });
 
-  describe('subscribe', function() {
-    it('invokes callback on every update', function() {
+  describe("subscribe", function () {
+    it("invokes callback on every update", function () {
       const id = 1337;
-      const requestId = 'fake-request-id';
+      const requestId = "fake-request-id";
 
       const callback = sinon.spy();
-      const handler: (data: {[prop: string]: any}) => void = ({ val }) => callback(val);
-      const subscription = api.subscribe('stream', id, handler, requestId);
+      const handler: (data: { [prop: string]: any }) => void = ({ val }) =>
+        callback(val);
+      const subscription = api.subscribe("stream", id, handler, requestId);
 
       const testPromise = subscription.then(() => {
         const emitUpdate = (val: string) => {
-          transport.emit('message', {
+          transport.emit("message", {
             data: {
-              stream: 'stream',
+              stream: "stream",
               payload: {
-                action: 'update',
+                action: "update",
                 data: {
                   pk: id,
                   val,
                 },
                 request_id: requestId,
-              }
-            }
+              },
+            },
           });
         };
 
-        emitUpdate('muffin');
-        expect(callback).to.have.been.calledOnce.and.calledWith('muffin');
+        emitUpdate("muffin");
+        expect(callback).to.have.been.calledOnce.and.calledWith("muffin");
 
-        emitUpdate('taco');
-        expect(callback).to.have.been.calledTwice.and.calledWith('taco');
+        emitUpdate("taco");
+        expect(callback).to.have.been.calledTwice.and.calledWith("taco");
       });
 
       // Acknowledge our subscription
-      transport.emit('message', {
+      transport.emit("message", {
         data: {
-          stream: 'stream',
+          stream: "stream",
           payload: {
-            action: 'subscribe_instance',
+            action: "subscribe_instance",
             request_id: requestId,
             response_status: 201,
-          }
-        }
+          },
+        },
       });
 
       return testPromise;
@@ -404,36 +451,38 @@ describe('DCRFClient', function() {
 
     [
       // Test without a custom pkField (default is "pk")
-      { pkField: 'pk' },
+      { pkField: "pk" },
       // Test with a custom pkField, with delete payload correction on
-      { pkField: 'id', ensurePkFieldInDeleteEvents: true },
+      { pkField: "id", ensurePkFieldInDeleteEvents: true },
       // Test with a custom pkField, without delete payload correction on
-      { pkField: 'id', ensurePkFieldInDeleteEvents: false },
+      { pkField: "id", ensurePkFieldInDeleteEvents: false },
     ].forEach(({ pkField, ensurePkFieldInDeleteEvents }) => {
-      it(`invokes callback on delete (pkField=${pkField}, ensurePkFieldInDeleteEvents=${ensurePkFieldInDeleteEvents})`, function() {
+      it(`invokes callback on delete (pkField=${pkField}, ensurePkFieldInDeleteEvents=${ensurePkFieldInDeleteEvents})`, function () {
         const api = initClient({ pkField, ensurePkFieldInDeleteEvents });
 
-        const payloadPkField = ensurePkFieldInDeleteEvents ? pkField : 'pk';
+        const payloadPkField = ensurePkFieldInDeleteEvents ? pkField : "pk";
         const id = 1337;
-        const requestId = 'fake-request-id';
+        const requestId = "fake-request-id";
 
         const callback = sinon.spy();
-        const handler: (data: {[prop: string]: any}) => void = ({ [payloadPkField]: pk }) => callback(pk);
-        const subscription = api.subscribe('stream', id, handler, requestId);
+        const handler: (data: { [prop: string]: any }) => void = ({
+          [payloadPkField]: pk,
+        }) => callback(pk);
+        const subscription = api.subscribe("stream", id, handler, requestId);
 
         const testPromise = subscription.then(() => {
           const emitDelete = () => {
-            transport.emit('message', {
+            transport.emit("message", {
               data: {
-                stream: 'stream',
+                stream: "stream",
                 payload: {
-                  action: 'delete',
+                  action: "delete",
                   data: {
                     pk: id,
                   },
                   request_id: requestId,
-                }
-              }
+                },
+              },
             });
           };
 
@@ -442,89 +491,115 @@ describe('DCRFClient', function() {
         });
 
         // Acknowledge our subscription
-        transport.emit('message', {
+        transport.emit("message", {
           data: {
-            stream: 'stream',
+            stream: "stream",
             payload: {
-              action: 'subscribe_instance',
+              action: "subscribe_instance",
               request_id: requestId,
               response_status: 201,
-            }
-          }
+            },
+          },
         });
 
         return testPromise;
       });
-    })
+    });
 
-    it('resubscribes on reconnect', function () {
-      const stream = 'stream';
+    it("resubscribes on reconnect", function () {
+      const stream = "stream";
       const id = 1337;
 
       const subReqMatch = sinon.match({
         stream,
         payload: {
-          action: 'subscribe_instance',
+          action: "subscribe_instance",
           pk: id,
-        }
+        },
       });
 
       api.subscribe(stream, id, () => {});
-      expect(transport.send).to.have.been.calledOnce.and.calledWithMatch(subReqMatch);
+      expect(transport.send).to.have.been.calledOnce.and.calledWithMatch(
+        subReqMatch
+      );
 
       transport.disconnect();
       transport.connect();
       expect(transport.send).to.have.been.calledTwice;
-      expect(transport.send.secondCall).to.have.been.calledWithMatch(subReqMatch);
+      expect(transport.send.secondCall).to.have.been.calledWithMatch(
+        subReqMatch
+      );
     });
 
-    it('stops listening on cancel', function () {
+    it("stops listening on cancel", function () {
       const id = 1337;
-      const requestId = 'fake-request-id';
+      const requestId = "fake-request-id";
 
       const callback = sinon.spy();
-      const handler: (data: {[prop: string]: any}) => void = ({ val }) => callback(val);
-      const subscription = api.subscribe('stream', id, handler, requestId);
+      const handler: (data: { [prop: string]: any }) => void = ({ val }) =>
+        callback(val);
+      const subscription = api.subscribe("stream", id, handler, requestId);
 
-      const testPromise =  subscription.then(() => {
+      const testPromise = subscription.then(() => {
         const emitUpdate = (val: string) => {
-          transport.emit('message', {
+          transport.emit("message", {
             data: {
-              stream: 'stream',
+              stream: "stream",
               payload: {
-                action: 'update',
+                action: "update",
                 data: {
                   pk: id,
-                  val
+                  val,
                 },
                 request_id: requestId,
-              }
-            }
+              },
+            },
           });
         };
 
-        emitUpdate('muffin');
-        expect(callback).to.have.been.calledOnce.and.calledWith('muffin');
+        emitUpdate("muffin");
+        expect(callback).to.have.been.calledOnce.and.calledWith("muffin");
 
         subscription.cancel();
 
-        emitUpdate('taco');
+        emitUpdate("taco");
         expect(callback).to.have.been.calledOnce;
       });
 
       // Acknowledge our subscription
-      transport.emit('message', {
+      transport.emit("message", {
         data: {
-          stream: 'stream',
+          stream: "stream",
           payload: {
-            action: 'subscribe_instance',
+            action: "subscribe_instance",
             request_id: requestId,
             response_status: 201,
-          }
-        }
+          },
+        },
       });
 
       return testPromise;
+    });
+  });
+
+  describe("customLogging", function () {
+    it("uses defaultLogger when no custom logger passed in option", function () {
+      const client: DCRFClient = initClient();
+      expect(client.logger.transports.length).to.equal(1);
+    });
+
+    it("uses customLogger no customLogger passed in option", function () {
+      const customLogger = createLogger({
+        transports: [
+          new transports.Console(),
+          new transports.Stream({
+            stream: process.stdout,
+          })
+        ],
+      });
+
+      const client: DCRFClient = initClient({ logger: customLogger });
+      expect(client.logger.transports.length).to.equal(2);
     });
   });
 });

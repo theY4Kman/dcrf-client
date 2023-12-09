@@ -10,21 +10,44 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [16.x]
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python 3.9
+    - name: Check out repository code
+      uses: actions/checkout@v2
+
+    # Setup Python (faster than using Python container)
+    - name: Setup Python 3.9
       uses: actions/setup-python@v2
       with:
-        python-version: 3.9
-    - name: Install Python dependencies
+        python-version: "3.9"
+    
+    - name: Cache pipenv
+      uses: actions/cache@v3
+      id: cache-pipenv
+      with:
+        path: ${{ env.pythonLocation }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/Pipfile.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pipenv    
+    
+    - name: Install pipenv
+      if: steps.cache-pipenv.outputs.cache-hit != 'true'
       run: |
-        python -m pip install --upgrade pip pipenv
-        pipenv install --dev
+        python -m pip install --upgrade pipenv wheel
+    
+    - name: Install Dependencies
+      if: steps.cache-pipenv.outputs.cache-hit != 'true'
+      run: |
+        pipenv install --system --deploy --dev
+    
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v2
       with:
         node-version: ${{ matrix.node-version }}
+      
     - name: Install redis-server
       uses: shogo82148/actions-setup-redis@v1
       with:

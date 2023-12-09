@@ -127,6 +127,13 @@ const client = dcrf.connect('wss://example.com', {
   pkField: 'id',
 
   /**
+   * Optionally pass your own winston.Logger instance 
+   * 
+   * Default: default library logger instance
+   */
+  logger: customLogger,
+
+  /**
    * Whether to ensure subscription delete event payloads store the primary key of the object
    * in the configured `pkField`, instead of the default 'pk'.
    *

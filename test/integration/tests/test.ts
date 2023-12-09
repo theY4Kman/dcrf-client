@@ -46,6 +46,7 @@ function readEvent(): {[prop: string]: any} {
     fs.readSync(0, buffer, i, 1, null);
 
     if (buffer[i] === '\n'.charCodeAt(0)) {
+      // @ts-ignore
       line = buffer.subarray(0, i).toString('utf-8');
       break;
     }
@@ -54,7 +55,7 @@ function readEvent(): {[prop: string]: any} {
   if (line == null) {
     throw new Error('Unable to read line from stdin');
   }
-
+  // @ts-ignore
   return JSON.parse(line.trim());
 }
 
@@ -101,6 +102,7 @@ describe('DCRFClient', function() {
 
         // Wait for websocket connection before allowing tests to begin
         const onWebsocketConnected = new Promise(resolve => {
+          // @ts-ignore
           client.transport.on('connect', () => resolve());
         })
         client.initialize();
@@ -231,7 +233,9 @@ describe('DCRFClient', function() {
             const originalName = thing.name;
 
             let afterUpdateResolve: () => any;
+            // @ts-ignore
             afterUpdatePromises.push(new Promise(resolve => {
+              // @ts-ignore
               afterUpdateResolve = resolve;
             }));
 
