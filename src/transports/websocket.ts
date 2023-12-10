@@ -28,7 +28,7 @@ export class WebsocketTransport extends EventEmitter implements ITransport {
     this.options = options;
     this.socket = null;
     this.hasConnected = false;
-    this.logger = logger || defaultLogger;
+    this.logger = logger ?? defaultLogger
   }
 
   @autobind

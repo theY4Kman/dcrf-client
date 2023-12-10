@@ -26,7 +26,7 @@ import { SubscriptionPromise } from "./subscriptions";
 import WebsocketTransport from "./transports/websocket";
 import { Logger } from "winston";
 
-const log = getLogger("dcrf");
+const defaultLogger = getLogger("dcrf");
 
 interface ISubscriptionDescriptor<S, P extends S> {
   selector: S;
@@ -115,7 +115,7 @@ export class DCRFClient implements IStreamingAPI {
     this.pkField = options.pkField ?? "pk";
     this.ensurePkFieldInDeleteEvents =
       options.ensurePkFieldInDeleteEvents ?? true;
-    this.logger = options.logger ?? log;
+    this.logger = options.logger ?? defaultLogger;
 
     if (this.options.buildMultiplexedMessage)
       this.buildMultiplexedMessage =
