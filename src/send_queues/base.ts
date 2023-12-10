@@ -15,7 +15,7 @@ class BaseSendQueue implements ISendQueue {
       throw new Error('Both sendNow and canSend must be provided, or neither must.');
     }
   }
-
+  //ts-ignore
   public sendNow: (bytes: string) => number = (bytes) => -1;
   public canSend: () => boolean = () => false;
 
@@ -28,9 +28,12 @@ class BaseSendQueue implements ISendQueue {
     this.canSend = canSend;
   }
 
+  //ts-ignore
   public send(bytes: string): number {
     throw new Error('not implemented');
   }
+
+  //ts-ignore
   public queueMessage(bytes: string): boolean {
     throw new Error('not implemented');
   }

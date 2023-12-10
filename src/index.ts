@@ -330,12 +330,12 @@ export class DCRFClient implements IStreamingAPI {
     ) => void = this.buildSubscribeListener(callback);
     const subscribePayload = this.buildSubscribePayload(
       options.subscribeAction,
-      args,
+      args as object,
       requestId
     );
     const unsubscribePayload = this.buildUnsubscribePayload(
       options.unsubscribeAction,
-      args,
+      args as object,
       requestId
     );
 
