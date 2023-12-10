@@ -86,6 +86,7 @@ const customSubscription = client.subscribe(
   },
   {
     includeCreateEvents: true,
+    includeDeleteEvents: true,
     subscribeAction: 'subscribe_all',
     unsubscribeAction: 'unsubscribe_all',
   },

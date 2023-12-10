@@ -306,6 +306,7 @@ export class DCRFClient implements IStreamingAPI {
 
     options = options ?? {};
     options.includeCreateEvents = options.includeCreateEvents ?? false;
+    options.includeDeleteEvents = options.includeDeleteEvents ?? true;
     options.requestId = options.requestId ?? UUID.generate();
     options.subscribeAction = options.subscribeAction ?? "subscribe_instance";
     options.unsubscribeAction =
@@ -322,10 +323,8 @@ export class DCRFClient implements IStreamingAPI {
 
     const requestId = options.requestId;
 
-    const createSelector = this.buildSubscribeCreateSelector(stream, requestId);
     const updateSelector = this.buildSubscribeUpdateSelector(stream, requestId);
-    const deleteSelector = this.buildSubscribeDeleteSelector(stream, requestId);
-
+    
     const handler: (
       data: typeof updateSelector & { payload: { data: any; action: string } }
     ) => void = this.buildSubscribeListener(callback);
@@ -362,8 +361,14 @@ export class DCRFClient implements IStreamingAPI {
     };
 
     addListener(updateSelector);
-    addListener(deleteSelector);
+
+    if (options.includeDeleteEvents) {
+      const deleteSelector = this.buildSubscribeDeleteSelector(stream, requestId);
+      addListener(deleteSelector);
+    }
+
     if (options.includeCreateEvents) {
+      const createSelector = this.buildSubscribeCreateSelector(stream, requestId);
       addListener(createSelector);
     }
 
