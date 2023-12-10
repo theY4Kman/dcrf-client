@@ -107,7 +107,7 @@ interface ISendQueue {
 }
 
 
-export type TransportEvent = 'open' | 'connect' | 'reconnect' | 'message';
+export type TransportEvent = 'open' | 'connect' | 'reconnect' | 'message' | 'error';
 
 export
 interface ITransport {
