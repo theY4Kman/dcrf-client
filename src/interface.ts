@@ -1,4 +1,4 @@
-import { Options as ReconnectingWebsocketOptions } from 'reconnecting-websocket';
+import ReconnectingWebSocket, { Options as ReconnectingWebsocketOptions } from 'reconnecting-websocket';
 import { Logger } from 'winston';
 
 export
@@ -111,6 +111,7 @@ export type TransportEvent = 'open' | 'connect' | 'reconnect' | 'message' | 'err
 
 export
 interface ITransport {
+
   /**
    * Initiate the transport's connection
    *
@@ -140,6 +141,7 @@ interface ITransport {
    *  - "connect": on initial connection
    *  - "reconnect": when the connection is lost, then reestablished
    *  - "message": when a message is received
+   *  - "error": when an error occurs
    */
   on(name: TransportEvent, handler: (...args: any) => void): any | null;
 

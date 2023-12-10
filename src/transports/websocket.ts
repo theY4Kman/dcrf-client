@@ -46,6 +46,7 @@ export class WebsocketTransport extends EventEmitter implements ITransport {
 
     this.socket.addEventListener("message", this.handleMessage);
     this.socket.addEventListener("open", this.handleOpen);
+    this.socket.addEventListener("error", this.handleError);
 
     return true;
   }
@@ -77,6 +78,11 @@ export class WebsocketTransport extends EventEmitter implements ITransport {
       );
     }
     this.socket.send(bytes);
+  }
+
+  @autobind
+  protected handleError(event: Event) {
+    this.emit("error", event);
   }
 
   @autobind

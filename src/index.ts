@@ -587,6 +587,7 @@ export class DCRFClient implements IStreamingAPI {
     this.queue.processQueue();
   }
 
+
   public buildMultiplexedMessage(stream: string, payload: object): object {
     return { stream, payload };
   }
